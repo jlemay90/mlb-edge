@@ -43,6 +43,12 @@
 }
 
 :root {
+  /* MLB Edge custom */
+  --mlb-red: oklch(0.62 0.22 25);
+  --mlb-green: oklch(0.65 0.20 145);
+  --mlb-blue: oklch(0.60 0.18 240);
+  --mlb-yellow: oklch(0.78 0.18 85);
+  --mlb-cyan: oklch(0.72 0.18 200);
   --primary: var(--color-blue-700);
   --primary-foreground: var(--color-blue-50);
   --sidebar-primary: var(--color-blue-600);
@@ -79,10 +85,29 @@
 }
 
 .dark {
-  --primary: var(--color-blue-700);
-  --primary-foreground: var(--color-blue-50);
-  --sidebar-primary: var(--color-blue-500);
-  --sidebar-primary-foreground: var(--color-blue-50);
+  --background: oklch(0.10 0.008 240);
+  --foreground: oklch(0.95 0.005 240);
+  --card: oklch(0.14 0.008 240);
+  --card-foreground: oklch(0.95 0.005 240);
+  --popover: oklch(0.14 0.008 240);
+  --popover-foreground: oklch(0.95 0.005 240);
+  --secondary: oklch(0.20 0.008 240);
+  --secondary-foreground: oklch(0.80 0.005 240);
+  --muted: oklch(0.18 0.008 240);
+  --muted-foreground: oklch(0.55 0.01 240);
+  --accent: oklch(0.20 0.008 240);
+  --accent-foreground: oklch(0.95 0.005 240);
+  --border: oklch(0.22 0.01 240);
+  --input: oklch(0.20 0.01 240);
+  --sidebar: oklch(0.12 0.008 240);
+  --sidebar-foreground: oklch(0.90 0.005 240);
+  --sidebar-accent: oklch(0.18 0.008 240);
+  --sidebar-accent-foreground: oklch(0.95 0.005 240);
+  --sidebar-border: oklch(0.22 0.01 240);
+  --primary: oklch(0.62 0.22 25);
+  --primary-foreground: oklch(0.98 0.005 240);
+  --sidebar-primary: oklch(0.62 0.22 25);
+  --sidebar-primary-foreground: oklch(0.98 0.005 240);
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.85 0.005 65);
   --card: oklch(0.21 0.006 285.885);
@@ -111,6 +136,23 @@
   --sidebar-accent-foreground:  oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.488 0.243 264.376);
+}
+
+@layer utilities {
+  .tier-a { background-color: oklch(0.65 0.20 145 / 0.15); color: oklch(0.75 0.20 145); border: 1px solid oklch(0.65 0.20 145 / 0.35); }
+  .tier-b { background-color: oklch(0.60 0.18 200 / 0.15); color: oklch(0.72 0.18 200); border: 1px solid oklch(0.60 0.18 200 / 0.35); }
+  .tier-c { background-color: oklch(0.78 0.18 85 / 0.12); color: oklch(0.78 0.18 85); border: 1px solid oklch(0.78 0.18 85 / 0.35); }
+  .tier-d { background-color: oklch(0.50 0.05 240 / 0.15); color: oklch(0.65 0.05 240); border: 1px solid oklch(0.50 0.05 240 / 0.35); }
+  .gradient-text {
+    background: linear-gradient(135deg, oklch(0.62 0.22 25), oklch(0.72 0.22 55));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .pick-card { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+  .pick-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px oklch(0 0 0 / 0.5); }
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .live-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
 }
 
 @layer base {
