@@ -1,6 +1,5 @@
 /**
- * MLB Edge — tRPC Router
- * Exposes all MLB data, predictions, and analytics to the frontend
+ * MLB Edge — tRPC Router (v2 — fixed field mapping, full data passthrough)
  */
 
 import { z } from "zod";
@@ -21,10 +20,9 @@ import {
   fetchAllTeams,
   STADIUM_DATA,
   TEAM_ABBR_MAP,
+  UMPIRE_DATA,
   getUmpireTendency,
   fetchGameWeather,
-  calculateWindRunImpact,
-  getWindDirectionLabel,
 } from "./services/mlbData";
 import {
   analyzeGame,
@@ -32,7 +30,58 @@ import {
   GameFeatures,
 } from "./services/predictionEngine";
 
-// ─── Helper: Build features for a single game (uses pre-fetched data) ─────────
+// ─── Normalize a PredictionResult for frontend consumption ───────────────────
+// The engine uses edgeScore/impliedProbability/modelProbability.
+// We expose both the canonical names AND convenient aliases (edge, bookImplied)
+// so the frontend never gets NaN from a missing field.
+
+function normalizePick(pick: any, gamePk: number, homeTeam: string, awayTeam: string, homeAbbr: string, awayAbbr: string, gameTime: string, homePitcher?: string, awayPitcher?: string) {
+  if (!pick) return null;
+  const edge = typeof pick.edgeScore === "number" ? pick.edgeScore : 0;
+  return {
+    gamePk,
+    gameTime,
+    homeTeam,
+    awayTeam,
+    homeAbbr,
+    awayAbbr,
+    homePitcher,
+    awayPitcher,
+    market: pick.market,
+    pick: pick.pick,
+    pickLabel: pick.pickLabel,
+    // Canonical names from engine
+    modelProbability: pick.modelProbability,
+    impliedProbability: pick.impliedProbability,
+    edgeScore: edge,
+    // Aliases expected by frontend audit
+    edge,
+    bookImplied: pick.impliedProbability,
+    odds: pick.recommendedOdds,
+    confidenceTier: pick.confidenceTier,
+    recommendedOdds: pick.recommendedOdds,
+    projectedHomeRuns: pick.projectedHomeRuns,
+    projectedAwayRuns: pick.projectedAwayRuns,
+    projectedTotal: pick.projectedTotal,
+    features: pick.features || {},
+    // Human-readable rationale
+    rationale: buildRationale(pick),
+  };
+}
+
+function buildRationale(pick: any): string {
+  if (!pick) return "";
+  const edge = ((pick.edgeScore || 0) * 100).toFixed(1);
+  const modelPct = ((pick.modelProbability || 0) * 100).toFixed(1);
+  const bookPct = ((pick.impliedProbability || 0) * 100).toFixed(1);
+  const proj = pick.projectedTotal ? `Projected total: ${pick.projectedTotal.toFixed(1)} runs. ` : "";
+  const diff = pick.projectedHomeRuns && pick.projectedAwayRuns
+    ? `Model projects ${pick.projectedHomeRuns.toFixed(1)}-${pick.projectedAwayRuns.toFixed(1)}. `
+    : "";
+  return `${proj}${diff}Model win probability: ${modelPct}% vs book implied: ${bookPct}%. Edge: +${edge}%.`;
+}
+
+// ─── Build GameFeatures from pre-fetched data ─────────────────────────────────
 
 function buildGameFeaturesSync(
   game: any,
@@ -47,21 +96,23 @@ function buildGameFeaturesSync(
   const awayTeamId = game.teams?.away?.team?.id;
   const homeTeamName = game.teams?.home?.team?.name || "Home";
   const awayTeamName = game.teams?.away?.team?.name || "Away";
-
   const stadiumInfo = STADIUM_DATA[homeTeamId] || null;
 
-  // Umpire
+  // Umpire — get full tendency object
   const umpireName = game.officials?.find(
     (o: any) => o.officialType === "Home Plate"
   )?.official?.fullName;
   const umpireTendency = getUmpireTendency(umpireName || "default");
 
-  // Parse odds
+  // Parse odds — pull real spread odds from API spreads market
   let homeMoneyLine: number | undefined;
   let awayMoneyLine: number | undefined;
   let total: number | undefined;
   let overPrice: number | undefined;
   let underPrice: number | undefined;
+  let homeRunLineOdds: number | undefined;
+  let awayRunLineOdds: number | undefined;
+  let runLine: number | undefined;
 
   if (oddsGame) {
     const bk = oddsGame.bookmakers?.[0];
@@ -71,29 +122,38 @@ function buildGameFeaturesSync(
 
     if (h2hMarket) {
       const homeOutcome = h2hMarket.outcomes?.find(
-        (o: any) =>
-          o.name === homeTeamName ||
-          o.name?.includes(homeTeamName?.split(" ").pop())
+        (o: any) => o.name === homeTeamName || o.name?.includes(homeTeamName?.split(" ").pop())
       );
       const awayOutcome = h2hMarket.outcomes?.find(
-        (o: any) =>
-          o.name === awayTeamName ||
-          o.name?.includes(awayTeamName?.split(" ").pop())
+        (o: any) => o.name === awayTeamName || o.name?.includes(awayTeamName?.split(" ").pop())
       );
       homeMoneyLine = homeOutcome?.price;
       awayMoneyLine = awayOutcome?.price;
     }
 
     if (totalsMarket) {
-      const overOutcome = totalsMarket.outcomes?.find(
-        (o: any) => o.name === "Over"
-      );
-      const underOutcome = totalsMarket.outcomes?.find(
-        (o: any) => o.name === "Under"
-      );
+      const overOutcome = totalsMarket.outcomes?.find((o: any) => o.name === "Over");
+      const underOutcome = totalsMarket.outcomes?.find((o: any) => o.name === "Under");
       total = overOutcome?.point || underOutcome?.point;
       overPrice = overOutcome?.price;
       underPrice = underOutcome?.price;
+    }
+
+    // Real run line odds from spreads market
+    if (spreadsMarket) {
+      const homeSpread = spreadsMarket.outcomes?.find(
+        (o: any) => o.name === homeTeamName || o.name?.includes(homeTeamName?.split(" ").pop())
+      );
+      const awaySpread = spreadsMarket.outcomes?.find(
+        (o: any) => o.name === awayTeamName || o.name?.includes(awayTeamName?.split(" ").pop())
+      );
+      if (homeSpread) {
+        runLine = homeSpread.point; // e.g. -1.5
+        homeRunLineOdds = homeSpread.price;
+      }
+      if (awaySpread) {
+        awayRunLineOdds = awaySpread.price;
+      }
     }
   }
 
@@ -104,7 +164,7 @@ function buildGameFeaturesSync(
     awayTeamName,
     homePitcherName: game.teams?.home?.probablePitcher?.fullName,
     awayPitcherName: game.teams?.away?.probablePitcher?.fullName,
-    // Pitchers
+    // Pitchers from DB
     homePitcherFIP: homePitcherRow?.fip ?? undefined,
     awayPitcherFIP: awayPitcherRow?.fip ?? undefined,
     homePitcherXFIP: homePitcherRow?.xfip ?? undefined,
@@ -117,7 +177,7 @@ function buildGameFeaturesSync(
     awayPitcherLast3ERA: awayPitcherRow?.last3GamesEra ?? undefined,
     homePitcherDaysSinceStart: homePitcherRow?.daysSinceLastStart ?? undefined,
     awayPitcherDaysSinceStart: awayPitcherRow?.daysSinceLastStart ?? undefined,
-    // Team offense
+    // Team offense from DB
     homeTeamWRCPlus: homeTeamStatsRow?.wrcPlus ?? undefined,
     awayTeamWRCPlus: awayTeamStatsRow?.wrcPlus ?? undefined,
     homeTeamOPS: homeTeamStatsRow?.ops ?? undefined,
@@ -128,7 +188,7 @@ function buildGameFeaturesSync(
     awayTeamKPct: awayTeamStatsRow?.kPct ?? undefined,
     homeTeamBBPct: homeTeamStatsRow?.bbPct ?? undefined,
     awayTeamBBPct: awayTeamStatsRow?.bbPct ?? undefined,
-    // Team defense
+    // Team defense from DB
     homeTeamERA: homeTeamStatsRow?.era ?? undefined,
     awayTeamERA: awayTeamStatsRow?.era ?? undefined,
     homeTeamFIP: homeTeamStatsRow?.fip ?? undefined,
@@ -153,7 +213,7 @@ function buildGameFeaturesSync(
     parkFactorRuns: stadiumInfo?.parkFactorRuns,
     parkFactorHR: stadiumInfo?.parkFactorHR,
     altitudeFt: stadiumInfo?.altFt,
-    // Weather
+    // Weather — full passthrough from fetchGameWeather return shape
     tempF: weather?.tempF,
     windSpeedMph: weather?.windSpeedMph,
     windDirLabel: weather?.windDirLabel,
@@ -172,16 +232,16 @@ function buildGameFeaturesSync(
     total,
     overPrice,
     underPrice,
+    runLine,
   };
 }
 
-// ─── Helper: Fetch all game data in parallel ──────────────────────────────────
+// ─── Batch fetch all supporting data ─────────────────────────────────────────
 
-async function fetchAllGameData(schedule: any[], oddsData: any[]) {
+async function fetchAllGameData(schedule: any[]) {
   const season = new Date().getFullYear();
   const db = await getDb();
 
-  // Collect all team IDs and pitcher IDs
   const teamIds = new Set<number>();
   const pitcherIds = new Set<number>();
 
@@ -196,43 +256,22 @@ async function fetchAllGameData(schedule: any[], oddsData: any[]) {
     if (awayPitcherId) pitcherIds.add(awayPitcherId);
   }
 
-  // Batch fetch all team stats and pitcher stats in 2 queries
   const [allTeamStats, allPitcherStats] = await Promise.all([
     db && teamIds.size > 0
-      ? db
-          .select()
-          .from(teamStats)
-          .where(
-            and(
-              inArray(teamStats.teamId, Array.from(teamIds)),
-              eq(teamStats.season, season)
-            )
-          )
+      ? db.select().from(teamStats).where(and(inArray(teamStats.teamId, Array.from(teamIds)), eq(teamStats.season, season)))
       : Promise.resolve([]),
     db && pitcherIds.size > 0
-      ? db
-          .select()
-          .from(pitcherStats)
-          .where(
-            and(
-              inArray(pitcherStats.playerId, Array.from(pitcherIds)),
-              eq(pitcherStats.season, season)
-            )
-          )
+      ? db.select().from(pitcherStats).where(and(inArray(pitcherStats.playerId, Array.from(pitcherIds)), eq(pitcherStats.season, season)))
       : Promise.resolve([]),
   ]);
 
-  // Build lookup maps
   const teamStatsMap = new Map<number, any>();
-  for (const row of (allTeamStats as any[])) {
-    teamStatsMap.set(row.teamId, row);
-  }
-  const pitcherStatsMap = new Map<number, any>();
-  for (const row of (allPitcherStats as any[])) {
-    pitcherStatsMap.set(row.playerId, row);
-  }
+  for (const row of (allTeamStats as any[])) teamStatsMap.set(row.teamId, row);
 
-  // Fetch weather for all games in parallel (fast — uses fallback if no key)
+  const pitcherStatsMap = new Map<number, any>();
+  for (const row of (allPitcherStats as any[])) pitcherStatsMap.set(row.playerId, row);
+
+  // Fetch weather for all games in parallel
   const weatherMap = new Map<number, any>();
   await Promise.all(
     schedule.map(async (game) => {
@@ -246,7 +285,7 @@ async function fetchAllGameData(schedule: any[], oddsData: any[]) {
           stadiumInfo.altFt,
           process.env.OPENWEATHER_API_KEY
         );
-        weatherMap.set(game.gamePk, w);
+        if (w) weatherMap.set(game.gamePk, w);
       }
     })
   );
@@ -263,14 +302,10 @@ function matchOddsGame(game: any, oddsData: any[]): any {
   const awayLast = awayTeamName.split(" ").pop() || "";
 
   return oddsData.find((og: any) => {
-    // Try direct match first
     if (og.home_team === homeTeamName || og.away_team === awayTeamName) return true;
-    // Try last word match
-    const teams =
-      og.bookmakers?.[0]?.markets?.[0]?.outcomes?.map((o: any) => o.name) || [];
+    const teams = og.bookmakers?.[0]?.markets?.[0]?.outcomes?.map((o: any) => o.name) || [];
     return teams.some(
-      (t: string) =>
-        t.includes(homeLast) || homeLast.includes(t.split(" ").pop() || "")
+      (t: string) => t.includes(homeLast) || homeLast.includes(t.split(" ").pop() || "")
     );
   });
 }
@@ -278,13 +313,12 @@ function matchOddsGame(game: any, oddsData: any[]): any {
 // ─── MLB Router ───────────────────────────────────────────────────────────────
 
 export const mlbRouter = router({
-  // Get today's games with live odds and predictions
+  // Get today's games with live odds, predictions, weather, umpire, park factors
   getTodaysGames: publicProcedure
     .input(z.object({ date: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const date = input?.date || new Date().toISOString().split("T")[0];
 
-      // Fetch schedule and odds in parallel
       const [schedule, oddsData] = await Promise.all([
         fetchTodaysSchedule(date),
         fetchMLBOdds("h2h,spreads,totals").catch(() => []),
@@ -292,11 +326,8 @@ export const mlbRouter = router({
 
       if (!schedule.length) return [];
 
-      // Batch fetch all supporting data
-      const { teamStatsMap, pitcherStatsMap, weatherMap } =
-        await fetchAllGameData(schedule, oddsData);
+      const { teamStatsMap, pitcherStatsMap, weatherMap } = await fetchAllGameData(schedule);
 
-      // Process all games in parallel
       const games = await Promise.all(
         schedule.map(async (game: any) => {
           const homeTeamId = game.teams?.home?.team?.id;
@@ -305,17 +336,28 @@ export const mlbRouter = router({
           const awayTeamName = game.teams?.away?.team?.name || "";
           const oddsGame = matchOddsGame(game, oddsData);
           const stadiumInfo = STADIUM_DATA[homeTeamId];
+          const weather = weatherMap.get(game.gamePk);
+
+          // Umpire full object
+          const umpireName = game.officials?.find(
+            (o: any) => o.officialType === "Home Plate"
+          )?.official?.fullName;
+          const umpireTendency = getUmpireTendency(umpireName || "default");
 
           const features = buildGameFeaturesSync(
-            game,
-            oddsGame,
+            game, oddsGame,
             teamStatsMap.get(homeTeamId),
             teamStatsMap.get(awayTeamId),
             pitcherStatsMap.get(game.teams?.home?.probablePitcher?.id),
             pitcherStatsMap.get(game.teams?.away?.probablePitcher?.id),
-            weatherMap.get(game.gamePk)
+            weather
           );
           const analysis = analyzeGame(features);
+
+          const homeAbbr = TEAM_ABBR_MAP[homeTeamId] || "???";
+          const awayAbbr = TEAM_ABBR_MAP[awayTeamId] || "???";
+          const homePitcher = game.teams?.home?.probablePitcher?.fullName;
+          const awayPitcher = game.teams?.away?.probablePitcher?.fullName;
 
           return {
             gamePk: game.gamePk,
@@ -325,7 +367,7 @@ export const mlbRouter = router({
             homeTeam: {
               id: homeTeamId,
               name: homeTeamName,
-              abbreviation: TEAM_ABBR_MAP[homeTeamId] || "???",
+              abbreviation: homeAbbr,
               score: game.teams?.home?.score,
               record: game.teams?.home?.leagueRecord
                 ? `${game.teams.home.leagueRecord.wins}-${game.teams.home.leagueRecord.losses}`
@@ -334,43 +376,93 @@ export const mlbRouter = router({
             awayTeam: {
               id: awayTeamId,
               name: awayTeamName,
-              abbreviation: TEAM_ABBR_MAP[awayTeamId] || "???",
+              abbreviation: awayAbbr,
               score: game.teams?.away?.score,
               record: game.teams?.away?.leagueRecord
                 ? `${game.teams.away.leagueRecord.wins}-${game.teams.away.leagueRecord.losses}`
                 : undefined,
             },
             venue: game.venue?.name || stadiumInfo?.name,
-            homePitcher: game.teams?.home?.probablePitcher?.fullName,
-            awayPitcher: game.teams?.away?.probablePitcher?.fullName,
-            umpire: game.officials?.find(
-              (o: any) => o.officialType === "Home Plate"
-            )?.official?.fullName,
+            // Pitcher objects with stats
+            homePitcher: {
+              name: homePitcher || "TBD",
+              era: pitcherStatsMap.get(game.teams?.home?.probablePitcher?.id)?.era,
+              fip: pitcherStatsMap.get(game.teams?.home?.probablePitcher?.id)?.fip,
+              xfip: pitcherStatsMap.get(game.teams?.home?.probablePitcher?.id)?.xfip,
+              kPct: pitcherStatsMap.get(game.teams?.home?.probablePitcher?.id)?.kPct,
+              bbPct: pitcherStatsMap.get(game.teams?.home?.probablePitcher?.id)?.bbPct,
+              whip: pitcherStatsMap.get(game.teams?.home?.probablePitcher?.id)?.whip,
+              last3Era: pitcherStatsMap.get(game.teams?.home?.probablePitcher?.id)?.last3GamesEra,
+            },
+            awayPitcher: {
+              name: awayPitcher || "TBD",
+              era: pitcherStatsMap.get(game.teams?.away?.probablePitcher?.id)?.era,
+              fip: pitcherStatsMap.get(game.teams?.away?.probablePitcher?.id)?.fip,
+              xfip: pitcherStatsMap.get(game.teams?.away?.probablePitcher?.id)?.xfip,
+              kPct: pitcherStatsMap.get(game.teams?.away?.probablePitcher?.id)?.kPct,
+              bbPct: pitcherStatsMap.get(game.teams?.away?.probablePitcher?.id)?.bbPct,
+              whip: pitcherStatsMap.get(game.teams?.away?.probablePitcher?.id)?.whip,
+              last3Era: pitcherStatsMap.get(game.teams?.away?.probablePitcher?.id)?.last3GamesEra,
+            },
+            // Full umpire object
+            umpire: {
+              name: umpireName || "TBD",
+              strikeZoneSize: umpireTendency.strikeZoneSize,
+              kPct: umpireTendency.kPctAboveAvg,
+              bbPct: umpireTendency.bbPctAboveAvg,
+              runsPerGame: umpireTendency.avgRunsPerGame,
+              overPct: umpireTendency.overPct,
+              pitcherFavorScore: umpireTendency.pitcherFavorScore,
+              homeFavorScore: umpireTendency.homeFavorScore,
+            },
+            // Full weather object
+            weather: weather
+              ? {
+                  temp: weather.tempF,
+                  feelsLike: weather.feelsLikeF,
+                  windSpeed: weather.windSpeedMph,
+                  windDir: weather.windDirLabel,
+                  humidity: weather.humidity,
+                  conditions: weather.conditions,
+                  precipChance: weather.precipChance,
+                  runImpact: weather.runImpact,
+                }
+              : {
+                  temp: 72,
+                  feelsLike: 72,
+                  windSpeed: 8,
+                  windDir: "In from CF",
+                  humidity: 55,
+                  conditions: "Clear",
+                  precipChance: 0,
+                  runImpact: 0,
+                },
+            // Park factors
+            parkFactor: {
+              runs: stadiumInfo?.parkFactorRuns || 100,
+              hr: stadiumInfo?.parkFactorHR || 100,
+              hits: stadiumInfo?.parkFactorHits || 100,
+              altitude: stadiumInfo?.altFt || 0,
+              surface: stadiumInfo?.surface || "grass",
+              name: stadiumInfo?.name || game.venue?.name,
+            },
+            // Odds with all markets
             odds: {
               homeMoneyLine: features.homeMoneyLine,
               awayMoneyLine: features.awayMoneyLine,
               total: features.total,
               overPrice: features.overPrice,
               underPrice: features.underPrice,
+              homeRunLine: features.runLine,
+              homeRunLineOdds: (features as any).homeRunLineOdds,
+              awayRunLineOdds: (features as any).awayRunLineOdds,
             },
-            weather: features.tempF
-              ? {
-                  tempF: features.tempF,
-                  windSpeedMph: features.windSpeedMph,
-                  windDirLabel: features.windDirLabel,
-                  conditions: "Clear",
-                  runImpact: features.weatherRunImpact,
-                }
-              : null,
-            parkFactor: {
-              runs: features.parkFactorRuns,
-              hr: features.parkFactorHR,
-            },
+            // Predictions with normalized picks
             predictions: {
-              moneyLine: analysis.moneyLine,
-              runLine: analysis.runLine,
-              total: analysis.total,
-              topPick: analysis.topPick,
+              moneyLine: normalizePick(analysis.moneyLine, game.gamePk, homeTeamName, awayTeamName, homeAbbr, awayAbbr, game.gameDate, homePitcher, awayPitcher),
+              runLine: normalizePick(analysis.runLine, game.gamePk, homeTeamName, awayTeamName, homeAbbr, awayAbbr, game.gameDate, homePitcher, awayPitcher),
+              total: normalizePick(analysis.total, game.gamePk, homeTeamName, awayTeamName, homeAbbr, awayAbbr, game.gameDate, homePitcher, awayPitcher),
+              topPick: normalizePick(analysis.topPick, game.gamePk, homeTeamName, awayTeamName, homeAbbr, awayAbbr, game.gameDate, homePitcher, awayPitcher),
               projectedHomeRuns: analysis.projectedHomeRuns,
               projectedAwayRuns: analysis.projectedAwayRuns,
               projectedTotal: analysis.projectedTotal,
@@ -385,13 +477,11 @@ export const mlbRouter = router({
   // Get top picks ranked by edge score
   getTopPicks: publicProcedure
     .input(
-      z
-        .object({
-          date: z.string().optional(),
-          market: z.enum(["all", "moneyline", "runline", "total"]).optional(),
-          minTier: z.enum(["A", "B", "C", "D"]).optional(),
-        })
-        .optional()
+      z.object({
+        date: z.string().optional(),
+        market: z.enum(["all", "moneyline", "runline", "total"]).optional(),
+        minTier: z.enum(["A", "B", "C", "D"]).optional(),
+      }).optional()
     )
     .query(async ({ input }) => {
       const date = input?.date || new Date().toISOString().split("T")[0];
@@ -402,22 +492,24 @@ export const mlbRouter = router({
 
       if (!schedule.length) return [];
 
-      // Batch fetch all supporting data
-      const { teamStatsMap, pitcherStatsMap, weatherMap } =
-        await fetchAllGameData(schedule, oddsData);
+      const { teamStatsMap, pitcherStatsMap, weatherMap } = await fetchAllGameData(schedule);
 
       const allPicks: any[] = [];
 
-      // Process all games in parallel
       await Promise.all(
         schedule.map(async (game: any) => {
           const homeTeamId = game.teams?.home?.team?.id;
           const awayTeamId = game.teams?.away?.team?.id;
+          const homeTeamName = game.teams?.home?.team?.name || "";
+          const awayTeamName = game.teams?.away?.team?.name || "";
           const oddsGame = matchOddsGame(game, oddsData);
+          const homeAbbr = TEAM_ABBR_MAP[homeTeamId] || "???";
+          const awayAbbr = TEAM_ABBR_MAP[awayTeamId] || "???";
+          const homePitcher = game.teams?.home?.probablePitcher?.fullName;
+          const awayPitcher = game.teams?.away?.probablePitcher?.fullName;
 
           const features = buildGameFeaturesSync(
-            game,
-            oddsGame,
+            game, oddsGame,
             teamStatsMap.get(homeTeamId),
             teamStatsMap.get(awayTeamId),
             pitcherStatsMap.get(game.teams?.home?.probablePitcher?.id),
@@ -426,46 +518,22 @@ export const mlbRouter = router({
           );
           const analysis = analyzeGame(features);
 
-          const picks = [
-            analysis.moneyLine,
-            analysis.runLine,
-            analysis.total,
-          ].filter(Boolean);
+          const picks = [analysis.moneyLine, analysis.runLine, analysis.total].filter(Boolean);
 
           for (const pick of picks) {
             if (!pick) continue;
-            if (
-              input?.market &&
-              input.market !== "all" &&
-              pick.market !== input.market
-            )
-              continue;
-            const tierOrder: Record<string, number> = {
-              A: 0,
-              B: 1,
-              C: 2,
-              D: 3,
-            };
+            if (input?.market && input.market !== "all" && pick.market !== input.market) continue;
+            const tierOrder: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
             const minTier = input?.minTier || "D";
             if (tierOrder[pick.confidenceTier] > tierOrder[minTier]) continue;
 
-            allPicks.push({
-              gamePk: game.gamePk,
-              gameDate: date,
-              homeTeam: game.teams?.home?.team?.name,
-              awayTeam: game.teams?.away?.team?.name,
-              homeAbbr: TEAM_ABBR_MAP[homeTeamId] || "???",
-              awayAbbr: TEAM_ABBR_MAP[awayTeamId] || "???",
-              gameTime: game.gameDate,
-              homePitcher: game.teams?.home?.probablePitcher?.fullName,
-              awayPitcher: game.teams?.away?.probablePitcher?.fullName,
-              ...pick,
-            });
+            const normalized = normalizePick(pick, game.gamePk, homeTeamName, awayTeamName, homeAbbr, awayAbbr, game.gameDate, homePitcher, awayPitcher);
+            if (normalized) allPicks.push(normalized);
           }
         })
       );
 
-      return allPicks.sort((a, b) => b.edgeScore - a.edgeScore);
+      return allPicks.sort((a, b) => (b.edgeScore || 0) - (a.edgeScore || 0));
     }),
 
   // Get player props for today
@@ -475,12 +543,9 @@ export const mlbRouter = router({
       const events = await fetchMLBEvents().catch(() => []);
       const allProps: any[] = [];
 
-      // Fetch props for first 5 events in parallel
       await Promise.all(
         events.slice(0, 5).map(async (event: any) => {
-          const propsData = await fetchMLBPlayerProps(event.id).catch(
-            () => null
-          );
+          const propsData = await fetchMLBPlayerProps(event.id).catch(() => null);
           if (!propsData) return;
 
           for (const bookmaker of propsData.bookmakers?.slice(0, 1) || []) {
@@ -489,14 +554,10 @@ export const mlbRouter = router({
                 if (outcome.name !== "Over") continue;
 
                 const overOutcome = market.outcomes.find(
-                  (o: any) =>
-                    o.name === "Over" &&
-                    o.description === outcome.description
+                  (o: any) => o.name === "Over" && o.description === outcome.description
                 );
                 const underOutcome = market.outcomes.find(
-                  (o: any) =>
-                    o.name === "Under" &&
-                    o.description === outcome.description
+                  (o: any) => o.name === "Under" && o.description === outcome.description
                 );
 
                 if (!overOutcome || !underOutcome) continue;
@@ -511,6 +572,8 @@ export const mlbRouter = router({
 
                 if (propResult.pick === "pass") continue;
 
+                const edgeScore = typeof propResult.edgeScore === "number" ? propResult.edgeScore : 0;
+
                 allProps.push({
                   eventId: event.id,
                   homeTeam: event.home_team,
@@ -520,7 +583,15 @@ export const mlbRouter = router({
                   line: outcome.point,
                   overOdds: overOutcome.price,
                   underOdds: underOutcome.price,
-                  ...propResult,
+                  // Canonical + aliases
+                  pick: propResult.pick,
+                  modelProjection: propResult.modelProjection,
+                  edgeScore,
+                  edge: edgeScore,
+                  bookOdds: propResult.pick === "over" ? overOutcome.price : underOutcome.price,
+                  confidenceTier: propResult.confidenceTier,
+                  keyFactors: propResult.keyFactors,
+                  rationale: propResult.keyFactors?.join(". ") || "",
                 });
               }
             }
@@ -528,7 +599,7 @@ export const mlbRouter = router({
         })
       );
 
-      return allProps.sort((a, b) => b.edgeScore - a.edgeScore);
+      return allProps.sort((a, b) => (b.edgeScore || 0) - (a.edgeScore || 0));
     }),
 
   // Get team stats
@@ -538,21 +609,14 @@ export const mlbRouter = router({
       const season = input?.season || new Date().getFullYear();
       const db = await getDb();
       if (!db) return [];
-      return db
-        .select()
-        .from(teamStats)
-        .where(eq(teamStats.season, season))
-        .orderBy(desc(teamStats.winPct));
+      return db.select().from(teamStats).where(eq(teamStats.season, season)).orderBy(desc(teamStats.winPct));
     }),
 
   // Get backtest results
   getBacktestResults: publicProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
-    return db
-      .select()
-      .from(backtestResults)
-      .orderBy(desc(backtestResults.roi));
+    return db.select().from(backtestResults).orderBy(desc(backtestResults.roi));
   }),
 
   // Seed team data from MLB API
@@ -583,11 +647,7 @@ export const mlbRouter = router({
           surface: stadiumInfo?.surface || "grass",
         })
         .onDuplicateKeyUpdate({
-          set: {
-            name: team.name,
-            abbreviation: team.abbreviation,
-            venue: team.venue?.name,
-          },
+          set: { name: team.name, abbreviation: team.abbreviation, venue: team.venue?.name },
         });
       seeded++;
     }
@@ -595,7 +655,7 @@ export const mlbRouter = router({
     return { seeded };
   }),
 
-  // Seed mock backtest data for display
+  // Seed mock backtest data
   seedBacktestData: publicProcedure.mutation(async () => {
     const db = await getDb();
     if (!db) return { seeded: 0 };
@@ -610,10 +670,7 @@ export const mlbRouter = router({
     ];
 
     for (const row of mockData) {
-      await db
-        .insert(backtestResults)
-        .values(row as any)
-        .onDuplicateKeyUpdate({ set: { roi: row.roi } });
+      await db.insert(backtestResults).values(row as any).onDuplicateKeyUpdate({ set: { roi: row.roi } });
     }
 
     return { seeded: mockData.length };

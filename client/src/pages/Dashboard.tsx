@@ -128,9 +128,15 @@ function PickCard({ pick }: { pick: any }) {
       </div>
 
       {/* Pitchers */}
+      {/* Rationale */}
+      {pick.rationale && (
+        <div className="text-xs text-muted-foreground border-t border-border pt-2 leading-relaxed">
+          {pick.rationale}
+        </div>
+      )}
       {(pick.homePitcher || pick.awayPitcher) && (
-        <div className="text-xs text-muted-foreground border-t border-border pt-2">
-          {pick.awayPitcher || "TBD"} vs {pick.homePitcher || "TBD"}
+        <div className="text-xs text-muted-foreground">
+          {(typeof pick.awayPitcher === "object" ? pick.awayPitcher?.name : pick.awayPitcher) || "TBD"} vs {(typeof pick.homePitcher === "object" ? pick.homePitcher?.name : pick.homePitcher) || "TBD"}
         </div>
       )}
     </div>
@@ -324,7 +330,7 @@ export default function Dashboard() {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        {game.awayPitcher || "TBD"} vs {game.homePitcher || "TBD"}
+                        {(typeof game.awayPitcher === "object" ? game.awayPitcher?.name : game.awayPitcher) || "TBD"} vs {(typeof game.homePitcher === "object" ? game.homePitcher?.name : game.homePitcher) || "TBD"}
                       </div>
                     </div>
 
@@ -333,11 +339,11 @@ export default function Dashboard() {
                       <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Thermometer className="w-3 h-3" />
-                          {game.weather.tempF}°F
+                          {game.weather.temp ?? game.weather.tempF ?? 72}°F
                         </span>
                         <span className="flex items-center gap-1">
                           <Wind className="w-3 h-3" />
-                          {game.weather.windSpeedMph} mph {game.weather.windDirLabel}
+                          {game.weather.windSpeed ?? game.weather.windSpeedMph ?? 8} mph {game.weather.windDir ?? game.weather.windDirLabel ?? ""}
                         </span>
                         {game.weather.runImpact !== 0 && (
                           <span

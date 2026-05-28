@@ -64,7 +64,7 @@ function GameCard({ game }: { game: any }) {
                 <span className="text-xs text-muted-foreground">{game.homeTeam?.record}</span>
               </div>
               <div className="text-xs text-muted-foreground">
-                {game.awayPitcher || "TBD"} vs {game.homePitcher || "TBD"}
+                {(typeof game.awayPitcher === "object" ? game.awayPitcher?.name : game.awayPitcher) || "TBD"} vs {(typeof game.homePitcher === "object" ? game.homePitcher?.name : game.homePitcher) || "TBD"}
               </div>
             </div>
             <div className="text-right">
@@ -133,10 +133,10 @@ function GameCard({ game }: { game: any }) {
             {weather && (
               <>
                 <span className="flex items-center gap-1">
-                  <Thermometer className="w-3 h-3" />{weather.tempF}°F
+                  <Thermometer className="w-3 h-3" />{weather.temp ?? weather.tempF ?? 72}°F
                 </span>
                 <span className="flex items-center gap-1">
-                  <Wind className="w-3 h-3" />{weather.windSpeedMph} mph {weather.windDirLabel}
+                  <Wind className="w-3 h-3" />{weather.windSpeed ?? weather.windSpeedMph ?? 8} mph {weather.windDir ?? weather.windDirLabel ?? ""}
                 </span>
                 {weather.runImpact !== 0 && (
                   <span className={cn("font-medium", weather.runImpact > 0 ? "text-red-400" : "text-blue-400")}>

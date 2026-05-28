@@ -104,11 +104,17 @@ export default function GameDetailPage() {
           <div className="mt-4 grid grid-cols-2 gap-4">
             <div className="bg-secondary/30 rounded-lg p-3">
               <div className="text-xs text-muted-foreground mb-1">Away SP</div>
-              <div className="font-semibold text-foreground">{game.awayPitcher || "TBD"}</div>
+              <div className="font-semibold text-foreground">{typeof game.awayPitcher === "object" ? game.awayPitcher?.name : game.awayPitcher || "TBD"}</div>
+              {typeof game.awayPitcher === "object" && game.awayPitcher?.era && (
+                <div className="text-xs text-muted-foreground mt-1">ERA {game.awayPitcher.era?.toFixed(2)} · FIP {game.awayPitcher.fip?.toFixed(2) ?? "—"} · K% {game.awayPitcher.kPct ? (game.awayPitcher.kPct * 100).toFixed(1) + "%" : "—"}</div>
+              )}
             </div>
             <div className="bg-secondary/30 rounded-lg p-3">
               <div className="text-xs text-muted-foreground mb-1">Home SP</div>
-              <div className="font-semibold text-foreground">{game.homePitcher || "TBD"}</div>
+              <div className="font-semibold text-foreground">{typeof game.homePitcher === "object" ? game.homePitcher?.name : game.homePitcher || "TBD"}</div>
+              {typeof game.homePitcher === "object" && game.homePitcher?.era && (
+                <div className="text-xs text-muted-foreground mt-1">ERA {game.homePitcher.era?.toFixed(2)} · FIP {game.homePitcher.fip?.toFixed(2) ?? "—"} · K% {game.homePitcher.kPct ? (game.homePitcher.kPct * 100).toFixed(1) + "%" : "—"}</div>
+              )}
             </div>
           </div>
         </div>
@@ -175,9 +181,12 @@ export default function GameDetailPage() {
               <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
                 <Thermometer className="w-4 h-4 text-blue-400" /> Weather Conditions
               </h3>
-              <FactorRow label="Temperature" value={`${weather.tempF}°F`} />
-              <FactorRow label="Wind" value={`${weather.windSpeedMph} mph ${weather.windDirLabel}`}
-                highlight={weather.windDirLabel?.includes("Out") ? "bad" : "good"} />
+              <FactorRow label="Temperature" value={`${weather.temp ?? 72}°F`} />
+              <FactorRow label="Humidity" value={`${weather.humidity ?? 55}%`} />
+              <FactorRow label="Wind" value={`${weather.windSpeed ?? 8} mph ${weather.windDir ?? "—"}`}
+                highlight={(weather.windDir ?? "").includes("Out") ? "bad" : "good"} />
+              <FactorRow label="Conditions" value={weather.conditions ?? "Clear"} />
+              <FactorRow label="Precip Chance" value={`${Math.round((weather.precipChance ?? 0) * 100)}%`} />
               <FactorRow label="Run Impact" value={`${(weather.runImpact ?? 0) > 0 ? "+" : ""}${weather.runImpact ?? 0} runs`}
                 highlight={(weather.runImpact ?? 0) > 0.5 ? "bad" : (weather.runImpact ?? 0) < -0.5 ? "good" : "neutral"} />
             </div>
@@ -202,7 +211,21 @@ export default function GameDetailPage() {
         {game.umpire && (
           <div className="bg-card border border-border rounded-xl p-5">
             <h3 className="text-sm font-bold text-foreground mb-3">Home Plate Umpire</h3>
-            <FactorRow label="Umpire" value={game.umpire} />
+            <FactorRow label="Umpire" value={typeof game.umpire === "object" ? game.umpire.name : game.umpire} />
+            {typeof game.umpire === "object" && (
+              <>
+                <FactorRow label="Strike Zone" value={`${((game.umpire.strikeZoneSize ?? 1) * 100).toFixed(0)}% of avg`}
+                  highlight={(game.umpire.strikeZoneSize ?? 1) > 1.03 ? "good" : (game.umpire.strikeZoneSize ?? 1) < 0.97 ? "bad" : "neutral"} />
+                <FactorRow label="K% vs Avg" value={`${(game.umpire.kPct ?? 0) > 0 ? "+" : ""}${(game.umpire.kPct ?? 0).toFixed(1)}%`}
+                  highlight={(game.umpire.kPct ?? 0) > 0.5 ? "good" : (game.umpire.kPct ?? 0) < -0.5 ? "bad" : "neutral"} />
+                <FactorRow label="Avg Runs/Game" value={(game.umpire.runsPerGame ?? 9.1).toFixed(1)}
+                  highlight={(game.umpire.runsPerGame ?? 9.1) > 9.5 ? "bad" : (game.umpire.runsPerGame ?? 9.1) < 8.7 ? "good" : "neutral"} />
+                <FactorRow label="Over %" value={`${game.umpire.overPct ?? 50}%`}
+                  highlight={(game.umpire.overPct ?? 50) > 52 ? "bad" : (game.umpire.overPct ?? 50) < 48 ? "good" : "neutral"} />
+                <FactorRow label="Pitcher Favor" value={`${(game.umpire.pitcherFavorScore ?? 0) > 0 ? "+" : ""}${(game.umpire.pitcherFavorScore ?? 0).toFixed(1)}`}
+                  highlight={(game.umpire.pitcherFavorScore ?? 0) > 0.5 ? "good" : (game.umpire.pitcherFavorScore ?? 0) < -0.5 ? "bad" : "neutral"} />
+              </>
+            )}
           </div>
         )}
       </div>
