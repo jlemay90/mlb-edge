@@ -263,29 +263,36 @@ export default function LandingPage() {
             <p className="text-muted-foreground">Start free. Upgrade when you're ready to go all-in.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              {
-                name: "Free",
-                price: "$0",
-                features: ["Top 3 daily picks", "Game schedule", "Team standings"],
-                cta: "Start Free",
-                highlight: false,
-              },
-              {
-                name: "Pro",
-                price: "$29/mo",
-                features: ["All picks (ML/RL/O-U)", "Player props", "Line movement", "Game detail"],
-                cta: "Go Pro",
-                highlight: true,
-              },
-              {
-                name: "Sharp",
-                price: "$79/mo",
-                features: ["Everything in Pro", "Parlay builder", "Moonshot HR props", "Steam alerts"],
-                cta: "Go Sharp",
-                highlight: false,
-              },
-            ].map((tier) => (
+          {[
+            {
+              name: "Free",
+              price: "$0",
+              promoNote: null,
+              features: ["Top 3 daily picks", "Game schedule", "Team standings"],
+              cta: "Start Free",
+              highlight: false,
+            },
+            {
+              name: "Pro",
+              price: "$19/mo",
+              regPrice: "$29/mo",
+              promoNote: "$10/mo off first 3 months — then $29/mo",
+              annualPromo: "or $175/yr (save $173 first year)",
+              features: ["All picks (ML/RL/O-U)", "Player props", "Line movement", "Game detail"],
+              cta: "Go Pro — $19/mo",
+              highlight: true,
+            },
+            {
+              name: "Sharp",
+              price: "$69/mo",
+              regPrice: "$79/mo",
+              promoNote: "$10/mo off first 3 months — then $79/mo",
+              annualPromo: "or $500/yr (save $448 first year)",
+              features: ["Everything in Pro", "Parlay builder", "Moonshot HR props", "Steam alerts"],
+              cta: "Go Sharp — $69/mo",
+              highlight: false,
+            },
+          ].map((tier) => (
               <Card
                 key={tier.name}
                 className={`${tier.highlight ? "border-primary ring-1 ring-primary" : "border-border"} bg-card`}
@@ -296,7 +303,18 @@ export default function LandingPage() {
                   )}
                   <div>
                     <div className="font-bold text-lg text-foreground">{tier.name}</div>
-                    <div className="text-2xl font-extrabold text-foreground mt-1">{tier.price}</div>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-2xl font-extrabold text-foreground">{tier.price}</span>
+                      {(tier as any).regPrice && (
+                        <span className="text-sm text-muted-foreground line-through">{(tier as any).regPrice}</span>
+                      )}
+                    </div>
+                    {(tier as any).promoNote && (
+                      <p className="text-xs text-yellow-400/80 mt-1">{(tier as any).promoNote}</p>
+                    )}
+                    {(tier as any).annualPromo && (
+                      <p className="text-xs text-green-400/80 mt-0.5">{(tier as any).annualPromo}</p>
+                    )}
                   </div>
                   <ul className="space-y-1.5">
                     {tier.features.map((f) => (
