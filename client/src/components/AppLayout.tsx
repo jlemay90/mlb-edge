@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { BarChart3, Home, TrendingUp, Users, Activity, Menu, X, Zap, Building2, MoveHorizontal } from "lucide-react";
+import { BarChart3, Home, TrendingUp, Users, Activity, Menu, X, Zap, Building2, MoveHorizontal, CreditCard, DollarSign } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,8 @@ const navItems = [
   { href: "/teams", label: "Team Explorer", icon: Building2 },
   { href: "/lines", label: "Line Movement", icon: MoveHorizontal },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/pricing", label: "Pricing", icon: DollarSign },
+  { href: "/billing", label: "Billing", icon: CreditCard },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

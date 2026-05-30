@@ -9,7 +9,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from "recharts";
 import { TrendingUp, TrendingDown, AlertTriangle, RefreshCw, Activity } from "lucide-react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 
 function americanToImplied(odds: number): number {
   if (odds > 0) return 100 / (odds + 100);
@@ -165,7 +165,7 @@ export default function LineMovementPage() {
                           <div className="font-semibold text-sm text-foreground">
                             {game.awayTeam.name} @ {game.homeTeam.name}
                           </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">{game.gameTime}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{format(parseISO(game.gameTime), 'h:mm a')}</div>
                         </div>
                         {game.odds && (
                           <div className="text-right text-xs">
@@ -197,7 +197,7 @@ export default function LineMovementPage() {
                         <h2 className="text-lg font-bold text-foreground">
                           {selectedGame.awayTeam.name} @ {selectedGame.homeTeam.name}
                         </h2>
-                        <p className="text-sm text-muted-foreground">{selectedGame.venue} · {selectedGame.gameTime}</p>
+                        <p className="text-sm text-muted-foreground">{selectedGame.venue} · {format(parseISO(selectedGame.gameTime), 'h:mm a z')}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <Activity className="h-4 w-4 text-primary" />

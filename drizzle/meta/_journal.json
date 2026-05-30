@@ -15,6 +15,13 @@
       "when": 1779906576594,
       "tag": "0001_heavy_umar",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1780167346880,
+      "tag": "0002_late_the_initiative",
+      "breakpoints": true
     }
   ]
 }

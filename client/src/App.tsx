@@ -11,6 +11,9 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import GameDetailPage from "./pages/GameDetailPage";
 import TeamsPage from "./pages/TeamsPage";
 import LineMovementPage from "./pages/LineMovementPage";
+import PricingPage from "./pages/PricingPage";
+import BillingPage from "./pages/BillingPage";
+import LandingPage from "./pages/LandingPage";
 
 function Router() {
   return (
@@ -22,6 +25,9 @@ function Router() {
       <Route path="/analytics" component={AnalyticsPage} />
       <Route path="/teams" component={TeamsPage} />
       <Route path="/lines" component={LineMovementPage} />
+      <Route path="/pricing" component={PricingPage} />
+      <Route path="/billing" component={BillingPage} />
+      <Route path="/landing" component={LandingPage} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

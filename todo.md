@@ -56,9 +56,28 @@
 - [x] Unit tests — 14 passing (prediction engine, router, backtest validation)
 
 ## Remaining / Future Enhancements
-- [ ] Team stats explorer page (splits deep dive, all 30 teams, advanced metrics, rankings)
-- [ ] Line movement chart (odds history tracking per game, open vs current, sharp money signals)
+- [x] Team stats explorer page (splits deep dive, all 30 teams, advanced metrics, rankings)
+- [x] Line movement chart (odds history tracking per game, open vs current, sharp money signals)
 - [ ] Scheduled data refresh (heartbeat job)
 - [x] OpenWeather API key integration — real-time weather live for all 30 stadiums
 - [ ] Retrosheet historical data import for deeper backtesting
 - [ ] Action Network line movement integration
+
+## Monetization — Stripe Subscriptions
+- [x] Stripe products.ts with Free/Pro/Sharp tier price IDs
+- [x] subscriptions table migration (stripe_customer_id, stripe_subscription_id, tier, status)
+- [x] stripe.checkout.sessions.create() server procedure
+- [x] Stripe webhook handler at /api/stripe/webhook
+- [x] Subscription tier paywall logic (Pro/Sharp gated features)
+- [x] Billing/Subscription management page (/billing)
+- [x] Pricing page component
+- [x] Upgrade prompt UI for free users hitting paywalled features
+
+## Marketing — Public Landing Page
+- [x] Public landing page at /landing (unauthenticated users)
+- [x] Hero section with app preview screenshot
+- [x] Feature highlights (ML predictions, live odds, 62% win rate)
+- [x] Pricing section (Free/Pro/Sharp tiers)
+- [x] Social proof / backtest stats section
+- [x] CTA buttons (Start Free / Go Pro / Go Sharp)
+- [x] Facebook-optimized meta tags (og:title, og:description, og:image)
