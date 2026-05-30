@@ -9,6 +9,8 @@ import GamesPage from "./pages/GamesPage";
 import PropsPage from "./pages/PropsPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import GameDetailPage from "./pages/GameDetailPage";
+import TeamsPage from "./pages/TeamsPage";
+import LineMovementPage from "./pages/LineMovementPage";
 
 function Router() {
   return (
@@ -18,6 +20,8 @@ function Router() {
       <Route path="/games/:gamePk" component={GameDetailPage} />
       <Route path="/props" component={PropsPage} />
       <Route path="/analytics" component={AnalyticsPage} />
+      <Route path="/teams" component={TeamsPage} />
+      <Route path="/lines" component={LineMovementPage} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

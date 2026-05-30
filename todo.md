@@ -56,9 +56,9 @@
 - [x] Unit tests — 14 passing (prediction engine, router, backtest validation)
 
 ## Remaining / Future Enhancements
-- [ ] Team stats explorer page (splits deep dive)
-- [ ] Line movement chart (odds history over time)
+- [ ] Team stats explorer page (splits deep dive, all 30 teams, advanced metrics, rankings)
+- [ ] Line movement chart (odds history tracking per game, open vs current, sharp money signals)
 - [ ] Scheduled data refresh (heartbeat job)
-- [ ] OpenWeather API key integration (currently using MLB weather data)
+- [x] OpenWeather API key integration — real-time weather live for all 30 stadiums
 - [ ] Retrosheet historical data import for deeper backtesting
 - [ ] Action Network line movement integration

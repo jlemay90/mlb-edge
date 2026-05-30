@@ -10,8 +10,9 @@ import {
   teamStats,
   pitcherStats,
   backtestResults,
+  oddsSnapshots,
 } from "../drizzle/schema";
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and, inArray, asc, gte, sql } from "drizzle-orm";
 import {
   fetchTodaysSchedule,
   fetchMLBOdds,
@@ -652,6 +653,283 @@ export const mlbRouter = router({
       seeded++;
     }
 
+    return { seeded };
+  }),
+
+  // ─── Team Stats Explorer ─────────────────────────────────────────────────
+  getTeamExplorer: publicProcedure
+    .input(
+      z.object({
+        season: z.number().optional(),
+        sortBy: z.enum(["winPct", "runsPerGame", "era", "fip", "wrcPlus", "ops", "whip"]).optional(),
+        league: z.enum(["AL", "NL", "all"]).optional(),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      const season = input?.season || new Date().getFullYear();
+      const db = await getDb();
+      if (!db) return { teams: [], rankings: {} };
+
+      // Fetch live standings from MLB API to get real W/L records
+      let standingsMap: Record<number, { wins: number; losses: number; winPct: number; streak: string; gb: string; division: string; divisionRank: number }> = {};
+      try {
+        const res = await fetch(`https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${season}&standingsTypes=regularSeason&hydrate=team,division`);
+        const data: any = await res.json();
+        for (const record of data.records || []) {
+          const division = record.division?.name || "";
+          for (const tr of record.teamRecords || []) {
+            const tid = tr.team?.id;
+            if (!tid) continue;
+            standingsMap[tid] = {
+              wins: tr.wins || 0,
+              losses: tr.losses || 0,
+              winPct: parseFloat(tr.winningPercentage || "0"),
+              streak: tr.streak?.streakCode || "",
+              gb: tr.gamesBack || "—",
+              division,
+              divisionRank: tr.divisionRank || 0,
+            };
+          }
+        }
+      } catch (e) {
+        console.warn("[TeamExplorer] Standings fetch failed", e);
+      }
+
+      // Fetch team stats from DB
+      const stats = await db.select().from(teamStats).where(eq(teamStats.season, season));
+      const teams = await db.select().from(mlbTeams);
+      const teamsMap = Object.fromEntries(teams.map((t) => [t.teamId, t]));
+
+      // Merge standings + stats + park factors
+      const merged = stats.map((s) => {
+        const team = teamsMap[s.teamId];
+        const standing = standingsMap[s.teamId] || {};
+        return {
+          teamId: s.teamId,
+          name: team?.name || `Team ${s.teamId}`,
+          abbreviation: team?.abbreviation || "",
+          division: standing.division || team?.division || "",
+          league: team?.league || "",
+          venue: team?.venue || "",
+          // Record
+          wins: standing.wins ?? s.wins ?? 0,
+          losses: standing.losses ?? s.losses ?? 0,
+          winPct: standing.winPct ?? s.winPct ?? 0,
+          streak: standing.streak || (s.streak && s.streak > 0 ? `W${s.streak}` : s.streak && s.streak < 0 ? `L${Math.abs(s.streak)}` : "—"),
+          gb: standing.gb || "—",
+          divisionRank: standing.divisionRank || 0,
+          lastTenW: s.lastTenW || 0,
+          lastTenL: s.lastTenL || 0,
+          // Offense
+          runsPerGame: s.runsPerGame,
+          wrcPlus: s.wrcPlus,
+          ops: s.ops,
+          obp: s.obp,
+          slg: s.slg,
+          avg: s.avg,
+          iso: s.iso,
+          babip: s.babip,
+          kPct: s.kPct,
+          bbPct: s.bbPct,
+          hrPerGame: s.hrPerGame,
+          // Splits
+          runsPerGameHome: s.runsPerGameHome,
+          runsPerGameAway: s.runsPerGameAway,
+          runsPerGameVsL: s.runsPerGameVsL,
+          runsPerGameVsR: s.runsPerGameVsR,
+          // Pitching
+          era: s.era,
+          fip: s.fip,
+          xfip: s.xfip,
+          whip: s.whip,
+          kPer9: s.kPer9,
+          bbPer9: s.bbPer9,
+          hrPer9: s.hrPer9,
+          eraHome: s.eraHome,
+          eraAway: s.eraAway,
+          // Park
+          parkFactorRuns: team?.parkFactorRuns,
+          parkFactorHR: team?.parkFactorHR,
+          altitudeFt: team?.stadiumAltitudeFt,
+          surface: team?.surface,
+        };
+      });
+
+      // Build league rankings for each key stat
+      const rankStat = (arr: typeof merged, key: keyof typeof merged[0], ascending = false) => {
+        const sorted = [...arr]
+          .filter((t) => t[key] != null)
+          .sort((a, b) => {
+            const av = a[key] as number;
+            const bv = b[key] as number;
+            return ascending ? av - bv : bv - av;
+          });
+        const rankMap: Record<number, number> = {};
+        sorted.forEach((t, i) => { rankMap[t.teamId] = i + 1; });
+        return rankMap;
+      };
+
+      const rankings = {
+        runsPerGame: rankStat(merged, "runsPerGame"),
+        wrcPlus: rankStat(merged, "wrcPlus"),
+        ops: rankStat(merged, "ops"),
+        era: rankStat(merged, "era", true),
+        fip: rankStat(merged, "fip", true),
+        whip: rankStat(merged, "whip", true),
+        winPct: rankStat(merged, "winPct"),
+      };
+
+      // Sort
+      const sortKey = (input?.sortBy || "winPct") as keyof typeof merged[0];
+      const ascending = ["era", "fip", "whip"].includes(sortKey);
+      merged.sort((a, b) => {
+        const av = (a[sortKey] as number) ?? 0;
+        const bv = (b[sortKey] as number) ?? 0;
+        return ascending ? av - bv : bv - av;
+      });
+
+      return { teams: merged, rankings };
+    }),
+
+  // ─── Line Movement ────────────────────────────────────────────────────────
+  getLineMovement: publicProcedure
+    .input(z.object({ gamePk: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { snapshots: [], summary: null };
+
+      const snapshots = await db
+        .select()
+        .from(oddsSnapshots)
+        .where(eq(oddsSnapshots.gamePk, input.gamePk))
+        .orderBy(asc(oddsSnapshots.snapshotAt))
+        .limit(200);
+
+      if (snapshots.length === 0) return { snapshots: [], summary: null };
+
+      const first = snapshots[0];
+      const last = snapshots[snapshots.length - 1];
+
+      const mlMovement = (last.homePrice ?? 0) - (first.homePrice ?? 0);
+      const totalMovement = (last.total ?? 0) - (first.total ?? 0);
+
+      // Detect sharp money signals
+      const sharpSignals: string[] = [];
+      if (Math.abs(mlMovement) >= 10) {
+        sharpSignals.push(
+          mlMovement > 0
+            ? `Home ML moved ${mlMovement > 0 ? "+" : ""}${mlMovement} pts (sharp home action)`
+            : `Away ML moved ${Math.abs(mlMovement)} pts (sharp away action)`
+        );
+      }
+      if (Math.abs(totalMovement) >= 0.5) {
+        sharpSignals.push(
+          totalMovement > 0
+            ? `Total moved up ${totalMovement.toFixed(1)} (sharp over action)`
+            : `Total moved down ${Math.abs(totalMovement).toFixed(1)} (sharp under action)`
+        );
+      }
+
+      const summary = {
+        openHomeML: first.homePrice,
+        openAwayML: first.awayPrice,
+        openTotal: first.total,
+        openOverPrice: first.overPrice,
+        openUnderPrice: first.underPrice,
+        currentHomeML: last.homePrice,
+        currentAwayML: last.awayPrice,
+        currentTotal: last.total,
+        currentOverPrice: last.overPrice,
+        currentUnderPrice: last.underPrice,
+        mlMovement,
+        totalMovement,
+        snapshotCount: snapshots.length,
+        sharpSignals,
+        firstSnapshot: first.snapshotAt,
+        lastSnapshot: last.snapshotAt,
+      };
+
+      return { snapshots, summary };
+    }),
+
+  // Snapshot current odds for a game (called on page load to build movement history)
+  snapshotOdds: publicProcedure
+    .input(
+      z.object({
+        gamePk: z.number(),
+        bookmaker: z.string().optional(),
+        homePrice: z.number().optional(),
+        awayPrice: z.number().optional(),
+        spread: z.number().optional(),
+        total: z.number().optional(),
+        overPrice: z.number().optional(),
+        underPrice: z.number().optional(),
+        market: z.enum(["h2h", "spreads", "totals", "player_props"]).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { ok: false };
+      await db.insert(oddsSnapshots).values({
+        gamePk: input.gamePk,
+        bookmaker: input.bookmaker || "consensus",
+        market: (input.market || "h2h") as any,
+        homePrice: input.homePrice,
+        awayPrice: input.awayPrice,
+        spread: input.spread,
+        total: input.total,
+        overPrice: input.overPrice,
+        underPrice: input.underPrice,
+      });
+      return { ok: true };
+    }),
+
+  // Seed team stats for all 30 teams (generates realistic 2026 stats)
+  seedTeamStats: publicProcedure.mutation(async () => {
+    const db = await getDb();
+    if (!db) return { seeded: 0 };
+    const season = 2026;
+
+    // Realistic 2026 team stats based on current MLB performance levels
+    const teamStatsData = [
+      { teamId: 147, runsPerGame: 5.2, wrcPlus: 118, ops: 0.782, obp: 0.338, slg: 0.444, avg: 0.268, iso: 0.176, babip: 0.301, kPct: 19.2, bbPct: 9.8, hrPerGame: 1.42, era: 3.61, fip: 3.55, xfip: 3.62, whip: 1.18, kPer9: 9.8, bbPer9: 3.1, hrPer9: 1.12, runsPerGameHome: 5.6, runsPerGameAway: 4.8, eraHome: 3.42, eraAway: 3.80, runsPerGameVsL: 5.1, runsPerGameVsR: 5.3, wins: 38, losses: 22, winPct: 0.633, lastTenW: 7, lastTenL: 3, streak: 3 },
+      { teamId: 119, runsPerGame: 5.1, wrcPlus: 116, ops: 0.778, obp: 0.336, slg: 0.442, avg: 0.265, iso: 0.177, babip: 0.298, kPct: 20.1, bbPct: 9.4, hrPerGame: 1.38, era: 3.48, fip: 3.42, xfip: 3.51, whip: 1.14, kPer9: 9.6, bbPer9: 2.9, hrPer9: 1.05, runsPerGameHome: 5.4, runsPerGameAway: 4.8, eraHome: 3.31, eraAway: 3.65, runsPerGameVsL: 5.0, runsPerGameVsR: 5.2, wins: 36, losses: 24, winPct: 0.600, lastTenW: 6, lastTenL: 4, streak: 2 },
+      { teamId: 144, runsPerGame: 4.9, wrcPlus: 112, ops: 0.762, obp: 0.330, slg: 0.432, avg: 0.261, iso: 0.171, babip: 0.295, kPct: 21.4, bbPct: 8.9, hrPerGame: 1.31, era: 3.72, fip: 3.68, xfip: 3.74, whip: 1.21, kPer9: 9.2, bbPer9: 3.2, hrPer9: 1.18, runsPerGameHome: 5.2, runsPerGameAway: 4.6, eraHome: 3.55, eraAway: 3.89, runsPerGameVsL: 4.8, runsPerGameVsR: 5.0, wins: 34, losses: 26, winPct: 0.567, lastTenW: 6, lastTenL: 4, streak: 1 },
+      { teamId: 143, runsPerGame: 5.0, wrcPlus: 114, ops: 0.771, obp: 0.333, slg: 0.438, avg: 0.263, iso: 0.175, babip: 0.297, kPct: 20.8, bbPct: 9.1, hrPerGame: 1.35, era: 3.65, fip: 3.59, xfip: 3.67, whip: 1.19, kPer9: 9.4, bbPer9: 3.0, hrPer9: 1.14, runsPerGameHome: 5.3, runsPerGameAway: 4.7, eraHome: 3.48, eraAway: 3.82, runsPerGameVsL: 4.9, runsPerGameVsR: 5.1, wins: 35, losses: 25, winPct: 0.583, lastTenW: 6, lastTenL: 4, streak: -1 },
+      { teamId: 117, runsPerGame: 4.8, wrcPlus: 110, ops: 0.758, obp: 0.328, slg: 0.430, avg: 0.259, iso: 0.171, babip: 0.293, kPct: 22.1, bbPct: 8.7, hrPerGame: 1.28, era: 3.58, fip: 3.52, xfip: 3.61, whip: 1.16, kPer9: 9.5, bbPer9: 2.8, hrPer9: 1.08, runsPerGameHome: 5.0, runsPerGameAway: 4.6, eraHome: 3.41, eraAway: 3.75, runsPerGameVsL: 4.7, runsPerGameVsR: 4.9, wins: 33, losses: 27, winPct: 0.550, lastTenW: 5, lastTenL: 5, streak: 0 },
+      { teamId: 111, runsPerGame: 4.7, wrcPlus: 108, ops: 0.752, obp: 0.325, slg: 0.427, avg: 0.257, iso: 0.170, babip: 0.291, kPct: 22.5, bbPct: 8.5, hrPerGame: 1.25, era: 3.82, fip: 3.76, xfip: 3.83, whip: 1.24, kPer9: 9.1, bbPer9: 3.3, hrPer9: 1.22, runsPerGameHome: 4.9, runsPerGameAway: 4.5, eraHome: 3.65, eraAway: 3.99, runsPerGameVsL: 4.6, runsPerGameVsR: 4.8, wins: 32, losses: 28, winPct: 0.533, lastTenW: 5, lastTenL: 5, streak: 2 },
+      { teamId: 112, runsPerGame: 4.6, wrcPlus: 106, ops: 0.748, obp: 0.323, slg: 0.425, avg: 0.255, iso: 0.170, babip: 0.290, kPct: 22.8, bbPct: 8.3, hrPerGame: 1.22, era: 3.91, fip: 3.85, xfip: 3.92, whip: 1.26, kPer9: 9.0, bbPer9: 3.4, hrPer9: 1.25, runsPerGameHome: 4.8, runsPerGameAway: 4.4, eraHome: 3.74, eraAway: 4.08, runsPerGameVsL: 4.5, runsPerGameVsR: 4.7, wins: 31, losses: 29, winPct: 0.517, lastTenW: 5, lastTenL: 5, streak: -2 },
+      { teamId: 158, runsPerGame: 4.5, wrcPlus: 104, ops: 0.742, obp: 0.320, slg: 0.422, avg: 0.253, iso: 0.169, babip: 0.288, kPct: 23.2, bbPct: 8.1, hrPerGame: 1.19, era: 4.01, fip: 3.95, xfip: 4.02, whip: 1.28, kPer9: 8.8, bbPer9: 3.5, hrPer9: 1.28, runsPerGameHome: 4.7, runsPerGameAway: 4.3, eraHome: 3.84, eraAway: 4.18, runsPerGameVsL: 4.4, runsPerGameVsR: 4.6, wins: 30, losses: 30, winPct: 0.500, lastTenW: 4, lastTenL: 6, streak: 1 },
+      { teamId: 138, runsPerGame: 4.4, wrcPlus: 102, ops: 0.738, obp: 0.318, slg: 0.420, avg: 0.251, iso: 0.169, babip: 0.286, kPct: 23.5, bbPct: 7.9, hrPerGame: 1.16, era: 4.12, fip: 4.06, xfip: 4.13, whip: 1.30, kPer9: 8.6, bbPer9: 3.6, hrPer9: 1.31, runsPerGameHome: 4.6, runsPerGameAway: 4.2, eraHome: 3.95, eraAway: 4.29, runsPerGameVsL: 4.3, runsPerGameVsR: 4.5, wins: 29, losses: 31, winPct: 0.483, lastTenW: 4, lastTenL: 6, streak: -3 },
+      { teamId: 109, runsPerGame: 4.8, wrcPlus: 109, ops: 0.755, obp: 0.326, slg: 0.429, avg: 0.258, iso: 0.171, babip: 0.292, kPct: 22.3, bbPct: 8.6, hrPerGame: 1.26, era: 3.95, fip: 3.89, xfip: 3.96, whip: 1.27, kPer9: 9.0, bbPer9: 3.3, hrPer9: 1.26, runsPerGameHome: 5.0, runsPerGameAway: 4.6, eraHome: 3.78, eraAway: 4.12, runsPerGameVsL: 4.7, runsPerGameVsR: 4.9, wins: 31, losses: 29, winPct: 0.517, lastTenW: 5, lastTenL: 5, streak: 1 },
+      { teamId: 136, runsPerGame: 4.3, wrcPlus: 99, ops: 0.728, obp: 0.314, slg: 0.414, avg: 0.248, iso: 0.166, babip: 0.283, kPct: 24.1, bbPct: 7.6, hrPerGame: 1.12, era: 3.88, fip: 3.82, xfip: 3.89, whip: 1.25, kPer9: 9.2, bbPer9: 3.1, hrPer9: 1.19, runsPerGameHome: 4.5, runsPerGameAway: 4.1, eraHome: 3.71, eraAway: 4.05, runsPerGameVsL: 4.2, runsPerGameVsR: 4.4, wins: 28, losses: 32, winPct: 0.467, lastTenW: 4, lastTenL: 6, streak: -1 },
+      { teamId: 135, runsPerGame: 4.2, wrcPlus: 97, ops: 0.722, obp: 0.311, slg: 0.411, avg: 0.246, iso: 0.165, babip: 0.281, kPct: 24.4, bbPct: 7.4, hrPerGame: 1.09, era: 3.72, fip: 3.66, xfip: 3.73, whip: 1.22, kPer9: 9.4, bbPer9: 2.9, hrPer9: 1.15, runsPerGameHome: 4.4, runsPerGameAway: 4.0, eraHome: 3.55, eraAway: 3.89, runsPerGameVsL: 4.1, runsPerGameVsR: 4.3, wins: 27, losses: 33, winPct: 0.450, lastTenW: 3, lastTenL: 7, streak: -2 },
+      { teamId: 137, runsPerGame: 4.0, wrcPlus: 93, ops: 0.712, obp: 0.306, slg: 0.406, avg: 0.242, iso: 0.164, babip: 0.277, kPct: 25.1, bbPct: 7.1, hrPerGame: 1.05, era: 3.65, fip: 3.59, xfip: 3.66, whip: 1.20, kPer9: 9.6, bbPer9: 2.7, hrPer9: 1.10, runsPerGameHome: 4.2, runsPerGameAway: 3.8, eraHome: 3.48, eraAway: 3.82, runsPerGameVsL: 3.9, runsPerGameVsR: 4.1, wins: 26, losses: 34, winPct: 0.433, lastTenW: 3, lastTenL: 7, streak: -4 },
+      { teamId: 110, runsPerGame: 4.7, wrcPlus: 107, ops: 0.750, obp: 0.324, slg: 0.426, avg: 0.256, iso: 0.170, babip: 0.290, kPct: 22.6, bbPct: 8.4, hrPerGame: 1.23, era: 4.05, fip: 3.99, xfip: 4.06, whip: 1.29, kPer9: 8.7, bbPer9: 3.5, hrPer9: 1.29, runsPerGameHome: 4.9, runsPerGameAway: 4.5, eraHome: 3.88, eraAway: 4.22, runsPerGameVsL: 4.6, runsPerGameVsR: 4.8, wins: 30, losses: 30, winPct: 0.500, lastTenW: 5, lastTenL: 5, streak: 2 },
+      { teamId: 141, runsPerGame: 4.5, wrcPlus: 103, ops: 0.740, obp: 0.319, slg: 0.421, avg: 0.252, iso: 0.169, babip: 0.287, kPct: 23.3, bbPct: 8.0, hrPerGame: 1.18, era: 4.18, fip: 4.12, xfip: 4.19, whip: 1.31, kPer9: 8.5, bbPer9: 3.7, hrPer9: 1.33, runsPerGameHome: 4.7, runsPerGameAway: 4.3, eraHome: 4.01, eraAway: 4.35, runsPerGameVsL: 4.4, runsPerGameVsR: 4.6, wins: 29, losses: 31, winPct: 0.483, lastTenW: 4, lastTenL: 6, streak: -1 },
+      { teamId: 114, runsPerGame: 4.6, wrcPlus: 105, ops: 0.745, obp: 0.321, slg: 0.424, avg: 0.254, iso: 0.170, babip: 0.289, kPct: 23.0, bbPct: 8.2, hrPerGame: 1.21, era: 4.08, fip: 4.02, xfip: 4.09, whip: 1.30, kPer9: 8.8, bbPer9: 3.5, hrPer9: 1.30, runsPerGameHome: 4.8, runsPerGameAway: 4.4, eraHome: 3.91, eraAway: 4.25, runsPerGameVsL: 4.5, runsPerGameVsR: 4.7, wins: 30, losses: 30, winPct: 0.500, lastTenW: 5, lastTenL: 5, streak: 1 },
+      { teamId: 116, runsPerGame: 4.4, wrcPlus: 101, ops: 0.735, obp: 0.317, slg: 0.418, avg: 0.250, iso: 0.168, babip: 0.285, kPct: 23.7, bbPct: 7.8, hrPerGame: 1.14, era: 4.15, fip: 4.09, xfip: 4.16, whip: 1.32, kPer9: 8.6, bbPer9: 3.6, hrPer9: 1.32, runsPerGameHome: 4.6, runsPerGameAway: 4.2, eraHome: 3.98, eraAway: 4.32, runsPerGameVsL: 4.3, runsPerGameVsR: 4.5, wins: 28, losses: 32, winPct: 0.467, lastTenW: 4, lastTenL: 6, streak: -2 },
+      { teamId: 118, runsPerGame: 4.3, wrcPlus: 100, ops: 0.730, obp: 0.315, slg: 0.415, avg: 0.249, iso: 0.166, babip: 0.284, kPct: 23.9, bbPct: 7.7, hrPerGame: 1.11, era: 4.22, fip: 4.16, xfip: 4.23, whip: 1.33, kPer9: 8.4, bbPer9: 3.7, hrPer9: 1.35, runsPerGameHome: 4.5, runsPerGameAway: 4.1, eraHome: 4.05, eraAway: 4.39, runsPerGameVsL: 4.2, runsPerGameVsR: 4.4, wins: 27, losses: 33, winPct: 0.450, lastTenW: 4, lastTenL: 6, streak: 1 },
+      { teamId: 142, runsPerGame: 4.5, wrcPlus: 104, ops: 0.742, obp: 0.320, slg: 0.422, avg: 0.253, iso: 0.169, babip: 0.288, kPct: 23.2, bbPct: 8.1, hrPerGame: 1.19, era: 3.98, fip: 3.92, xfip: 3.99, whip: 1.27, kPer9: 8.9, bbPer9: 3.4, hrPer9: 1.27, runsPerGameHome: 4.7, runsPerGameAway: 4.3, eraHome: 3.81, eraAway: 4.15, runsPerGameVsL: 4.4, runsPerGameVsR: 4.6, wins: 29, losses: 31, winPct: 0.483, lastTenW: 5, lastTenL: 5, streak: -1 },
+      { teamId: 134, runsPerGame: 4.2, wrcPlus: 96, ops: 0.718, obp: 0.309, slg: 0.409, avg: 0.244, iso: 0.165, babip: 0.279, kPct: 24.6, bbPct: 7.3, hrPerGame: 1.07, era: 3.78, fip: 3.72, xfip: 3.79, whip: 1.23, kPer9: 9.3, bbPer9: 2.8, hrPer9: 1.17, runsPerGameHome: 4.4, runsPerGameAway: 4.0, eraHome: 3.61, eraAway: 3.95, runsPerGameVsL: 4.1, runsPerGameVsR: 4.3, wins: 26, losses: 34, winPct: 0.433, lastTenW: 3, lastTenL: 7, streak: -3 },
+      { teamId: 108, runsPerGame: 4.1, wrcPlus: 95, ops: 0.715, obp: 0.308, slg: 0.407, avg: 0.243, iso: 0.164, babip: 0.278, kPct: 24.8, bbPct: 7.2, hrPerGame: 1.04, era: 4.28, fip: 4.22, xfip: 4.29, whip: 1.35, kPer9: 8.3, bbPer9: 3.8, hrPer9: 1.37, runsPerGameHome: 4.3, runsPerGameAway: 3.9, eraHome: 4.11, eraAway: 4.45, runsPerGameVsL: 4.0, runsPerGameVsR: 4.2, wins: 25, losses: 35, winPct: 0.417, lastTenW: 3, lastTenL: 7, streak: -2 },
+      { teamId: 139, runsPerGame: 4.3, wrcPlus: 99, ops: 0.728, obp: 0.314, slg: 0.414, avg: 0.248, iso: 0.166, babip: 0.283, kPct: 24.1, bbPct: 7.6, hrPerGame: 1.12, era: 4.02, fip: 3.96, xfip: 4.03, whip: 1.28, kPer9: 8.8, bbPer9: 3.5, hrPer9: 1.29, runsPerGameHome: 4.5, runsPerGameAway: 4.1, eraHome: 3.85, eraAway: 4.19, runsPerGameVsL: 4.2, runsPerGameVsR: 4.4, wins: 28, losses: 32, winPct: 0.467, lastTenW: 4, lastTenL: 6, streak: 1 },
+      { teamId: 121, runsPerGame: 4.6, wrcPlus: 106, ops: 0.748, obp: 0.323, slg: 0.425, avg: 0.255, iso: 0.170, babip: 0.290, kPct: 22.8, bbPct: 8.3, hrPerGame: 1.22, era: 4.11, fip: 4.05, xfip: 4.12, whip: 1.30, kPer9: 8.7, bbPer9: 3.6, hrPer9: 1.31, runsPerGameHome: 4.8, runsPerGameAway: 4.4, eraHome: 3.94, eraAway: 4.28, runsPerGameVsL: 4.5, runsPerGameVsR: 4.7, wins: 30, losses: 30, winPct: 0.500, lastTenW: 5, lastTenL: 5, streak: 2 },
+      { teamId: 120, runsPerGame: 3.9, wrcPlus: 91, ops: 0.705, obp: 0.302, slg: 0.403, avg: 0.239, iso: 0.164, babip: 0.274, kPct: 25.4, bbPct: 6.9, hrPerGame: 1.01, era: 4.45, fip: 4.39, xfip: 4.46, whip: 1.38, kPer9: 8.1, bbPer9: 3.9, hrPer9: 1.42, runsPerGameHome: 4.1, runsPerGameAway: 3.7, eraHome: 4.28, eraAway: 4.62, runsPerGameVsL: 3.8, runsPerGameVsR: 4.0, wins: 24, losses: 36, winPct: 0.400, lastTenW: 3, lastTenL: 7, streak: -5 },
+      { teamId: 113, runsPerGame: 4.4, wrcPlus: 102, ops: 0.738, obp: 0.318, slg: 0.420, avg: 0.251, iso: 0.169, babip: 0.286, kPct: 23.5, bbPct: 7.9, hrPerGame: 1.16, era: 4.18, fip: 4.12, xfip: 4.19, whip: 1.31, kPer9: 8.5, bbPer9: 3.7, hrPer9: 1.33, runsPerGameHome: 4.6, runsPerGameAway: 4.2, eraHome: 4.01, eraAway: 4.35, runsPerGameVsL: 4.3, runsPerGameVsR: 4.5, wins: 27, losses: 33, winPct: 0.450, lastTenW: 4, lastTenL: 6, streak: -1 },
+      { teamId: 115, runsPerGame: 4.5, wrcPlus: 104, ops: 0.742, obp: 0.320, slg: 0.422, avg: 0.253, iso: 0.169, babip: 0.288, kPct: 23.2, bbPct: 8.1, hrPerGame: 1.19, era: 5.12, fip: 5.06, xfip: 5.13, whip: 1.52, kPer9: 7.8, bbPer9: 4.2, hrPer9: 1.68, runsPerGameHome: 4.7, runsPerGameAway: 4.3, eraHome: 4.95, eraAway: 5.29, runsPerGameVsL: 4.4, runsPerGameVsR: 4.6, wins: 22, losses: 38, winPct: 0.367, lastTenW: 2, lastTenL: 8, streak: -6 },
+      { teamId: 133, runsPerGame: 3.8, wrcPlus: 89, ops: 0.698, obp: 0.299, slg: 0.399, avg: 0.237, iso: 0.162, babip: 0.272, kPct: 25.8, bbPct: 6.7, hrPerGame: 0.98, era: 4.52, fip: 4.46, xfip: 4.53, whip: 1.40, kPer9: 8.0, bbPer9: 4.0, hrPer9: 1.45, runsPerGameHome: 4.0, runsPerGameAway: 3.6, eraHome: 4.35, eraAway: 4.69, runsPerGameVsL: 3.7, runsPerGameVsR: 3.9, wins: 21, losses: 39, winPct: 0.350, lastTenW: 2, lastTenL: 8, streak: -4 },
+      { teamId: 140, runsPerGame: 4.6, wrcPlus: 106, ops: 0.748, obp: 0.323, slg: 0.425, avg: 0.255, iso: 0.170, babip: 0.290, kPct: 22.8, bbPct: 8.3, hrPerGame: 1.22, era: 4.08, fip: 4.02, xfip: 4.09, whip: 1.29, kPer9: 8.7, bbPer9: 3.5, hrPer9: 1.30, runsPerGameHome: 4.8, runsPerGameAway: 4.4, eraHome: 3.91, eraAway: 4.25, runsPerGameVsL: 4.5, runsPerGameVsR: 4.7, wins: 30, losses: 30, winPct: 0.500, lastTenW: 5, lastTenL: 5, streak: 1 },
+      { teamId: 146, runsPerGame: 3.9, wrcPlus: 90, ops: 0.702, obp: 0.301, slg: 0.401, avg: 0.238, iso: 0.163, babip: 0.273, kPct: 25.6, bbPct: 6.8, hrPerGame: 0.99, era: 4.38, fip: 4.32, xfip: 4.39, whip: 1.36, kPer9: 8.2, bbPer9: 3.9, hrPer9: 1.40, runsPerGameHome: 4.1, runsPerGameAway: 3.7, eraHome: 4.21, eraAway: 4.55, runsPerGameVsL: 3.8, runsPerGameVsR: 4.0, wins: 23, losses: 37, winPct: 0.383, lastTenW: 3, lastTenL: 7, streak: -3 },
+      { teamId: 145, runsPerGame: 3.7, wrcPlus: 87, ops: 0.692, obp: 0.296, slg: 0.396, avg: 0.234, iso: 0.162, babip: 0.269, kPct: 26.2, bbPct: 6.5, hrPerGame: 0.95, era: 4.62, fip: 4.56, xfip: 4.63, whip: 1.42, kPer9: 7.9, bbPer9: 4.1, hrPer9: 1.48, runsPerGameHome: 3.9, runsPerGameAway: 3.5, eraHome: 4.45, eraAway: 4.79, runsPerGameVsL: 3.6, runsPerGameVsR: 3.8, wins: 20, losses: 40, winPct: 0.333, lastTenW: 2, lastTenL: 8, streak: -7 },
+    ];
+
+    let seeded = 0;
+    for (const row of teamStatsData) {
+      await db.insert(teamStats).values({ ...row, season } as any)
+        .onDuplicateKeyUpdate({ set: { runsPerGame: row.runsPerGame, winPct: row.winPct, era: row.era } });
+      seeded++;
+    }
     return { seeded };
   }),
 

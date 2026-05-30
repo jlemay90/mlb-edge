@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { BarChart3, Home, TrendingUp, Users, Activity, Menu, X, Zap } from "lucide-react";
+import { BarChart3, Home, TrendingUp, Users, Activity, Menu, X, Zap, Building2, MoveHorizontal } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -7,6 +7,8 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/games", label: "Today's Games", icon: Activity },
   { href: "/props", label: "Player Props", icon: Users },
+  { href: "/teams", label: "Team Explorer", icon: Building2 },
+  { href: "/lines", label: "Line Movement", icon: MoveHorizontal },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
