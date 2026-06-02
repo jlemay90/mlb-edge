@@ -58,10 +58,10 @@
 ## Remaining / Future Enhancements
 - [x] Team stats explorer page (splits deep dive, all 30 teams, advanced metrics, rankings)
 - [x] Line movement chart (odds history tracking per game, open vs current, sharp money signals)
-- [ ] Scheduled data refresh (heartbeat job)
+- [x] Scheduled data refresh (heartbeat job) — /api/scheduled/refresh handler built + mounted (pre-warms cache, snapshots odds for line-movement history). Cron registered post-deploy via manus-heartbeat.
 - [x] OpenWeather API key integration — real-time weather live for all 30 stadiums
-- [ ] Retrosheet historical data import for deeper backtesting
-- [ ] Action Network line movement integration
+- [~] Retrosheet historical data import — DEFERRED (out of launch scope: GBs of play-by-play, needs real data pipeline/infra incompatible with Node-only Cloud Run; no user-facing impact today)
+- [~] Action Network line movement integration — DEFERRED (no public API; scraping a paywalled third party is a ToS/legal risk for a paid product. Own odds-snapshot system already provides line movement from a legitimate source.)
 
 ## Monetization — Stripe Subscriptions
 - [x] Stripe products.ts with Free/Pro/Sharp tier price IDs

@@ -9,6 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerStripeWebhook } from "../stripe/webhookHandler";
+import { scheduledRefreshHandler } from "../scheduled/refreshHandler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -47,6 +48,10 @@ async function startServer() {
       createContext,
     })
   );
+  // Scheduled (Heartbeat) endpoints — must be registered before the Vite/static
+  // fallthrough. /api/scheduled/* is not auto-registered.
+  app.post("/api/scheduled/refresh", scheduledRefreshHandler);
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
