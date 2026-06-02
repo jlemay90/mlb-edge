@@ -9,6 +9,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from "recharts";
 import { TrendingUp, TrendingDown, AlertTriangle, RefreshCw, Activity } from "lucide-react";
+import { RequireTier } from "@/components/RequireTier";
 import { format, parseISO } from "date-fns";
 
 function americanToImplied(odds: number): number {
@@ -117,6 +118,7 @@ export default function LineMovementPage() {
 
   return (
     <AppLayout>
+      <RequireTier tier="pro" featureName="Line movement tracking">
       <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -377,6 +379,7 @@ export default function LineMovementPage() {
           </div>
         </div>
       </div>
+      </RequireTier>
     </AppLayout>
   );
 }

@@ -1,5 +1,6 @@
 import AppLayout from "@/components/AppLayout";
 import { trpc } from "@/lib/trpc";
+import { RequireTier } from "@/components/RequireTier";
 import { Users, RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -102,6 +103,7 @@ export default function PropsPage() {
 
   return (
     <AppLayout>
+      <RequireTier tier="pro" featureName="Player props">
       <div className="p-6 max-w-7xl mx-auto space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -162,6 +164,7 @@ export default function PropsPage() {
           </div>
         )}
       </div>
+      </RequireTier>
     </AppLayout>
   );
 }

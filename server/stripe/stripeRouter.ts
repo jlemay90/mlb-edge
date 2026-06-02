@@ -37,6 +37,7 @@ export const stripeRouter = router({
         tier: z.enum(["pro", "sharp"]),
         billing: z.enum(["monthly", "annual"]).default("monthly"),
         origin: z.string(),
+        trialDays: z.number().int().min(0).max(30).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -81,11 +82,19 @@ export const stripeRouter = router({
         success_url: `${input.origin}/billing?success=1&tier=${input.tier}`,
         cancel_url: `${input.origin}/pricing?canceled=1`,
         subscription_data: {
+          // 7-day free trial by default. A card is collected upfront so Stripe
+          // auto-charges at trial end (and emails its own renewal reminder),
+          // which minimizes "forgot to cancel" disputes.
+          trial_period_days: input.trialDays ?? 7,
+          trial_settings: {
+            end_behavior: { missing_payment_method: "cancel" },
+          },
           metadata: {
             user_id: ctx.user.id.toString(),
             tier: input.tier,
           },
         },
+        payment_method_collection: "always",
       });
 
       return { url: session.url };

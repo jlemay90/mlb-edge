@@ -13,6 +13,7 @@ import {
   oddsSnapshots,
 } from "../drizzle/schema";
 import { eq, desc, and, inArray, asc, gte, sql } from "drizzle-orm";
+import { cached, TTL } from "./services/cache";
 import {
   fetchTodaysSchedule,
   fetchMLBOdds,
@@ -319,7 +320,7 @@ export const mlbRouter = router({
     .input(z.object({ date: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const date = input?.date || new Date().toISOString().split("T")[0];
-
+      return cached(`todaysGames:${date}`, TTL.picks, async () => {
       const [schedule, oddsData] = await Promise.all([
         fetchTodaysSchedule(date),
         fetchMLBOdds("h2h,spreads,totals").catch(() => []),
@@ -473,6 +474,7 @@ export const mlbRouter = router({
       );
 
       return games;
+      });
     }),
 
   // Get top picks ranked by edge score
@@ -486,6 +488,8 @@ export const mlbRouter = router({
     )
     .query(async ({ input }) => {
       const date = input?.date || new Date().toISOString().split("T")[0];
+      const cacheKey = `topPicks:${date}:${input?.market || "all"}:${input?.minTier || "D"}`;
+      return cached(cacheKey, TTL.picks, async () => {
       const [schedule, oddsData] = await Promise.all([
         fetchTodaysSchedule(date),
         fetchMLBOdds("h2h,spreads,totals").catch(() => []),
@@ -535,6 +539,7 @@ export const mlbRouter = router({
       );
 
       return allPicks.sort((a, b) => (b.edgeScore || 0) - (a.edgeScore || 0));
+      });
     }),
 
   // Get player props for today

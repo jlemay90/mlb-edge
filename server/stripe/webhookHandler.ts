@@ -84,7 +84,7 @@ export function registerStripeWebhook(app: Express) {
                   stripeCustomerId: customerId,
                   stripeSubscriptionId: subscriptionId,
                   subscriptionTier: tier,
-                  subscriptionStatus: "active",
+                  subscriptionStatus: "trialing",
                 } as any)
                 .where(eq(users.id, userId));
               console.log(`[Stripe Webhook] User ${userId} upgraded to ${tier}`);
@@ -92,21 +92,32 @@ export function registerStripeWebhook(app: Express) {
             break;
           }
 
+          case "customer.subscription.created":
           case "customer.subscription.updated": {
             const subscription = event.data.object as Stripe.Subscription;
             const customerId = subscription.customer as string;
             const tier = tierFromMetadata(subscription.metadata as Record<string, string>);
             const status = subscription.status;
+            // Statuses that should grant access. "trialing" is critical —
+            // a 7-day free trial reports "trialing", NOT "active".
+            const grantsAccess = status === "active" || status === "trialing";
+            // Derive the trial/period end so the UI can show "renews on".
+            const periodEndUnix =
+              (subscription as any).items?.data?.[0]?.current_period_end ??
+              (subscription as any).current_period_end ??
+              null;
+            const periodEnd = periodEndUnix ? new Date(periodEndUnix * 1000) : null;
 
             await db
               .update(users)
               .set({
-                subscriptionTier: status === "active" ? tier : "free",
+                subscriptionTier: grantsAccess ? tier : "free",
                 subscriptionStatus: status,
-                subscriptionPeriodEnd: null,
+                stripeSubscriptionId: subscription.id,
+                subscriptionPeriodEnd: periodEnd,
               } as any)
               .where(eq((users as any).stripeCustomerId, customerId));
-            console.log(`[Stripe Webhook] Subscription updated for customer ${customerId}: ${status}`);
+            console.log(`[Stripe Webhook] Subscription ${status} for customer ${customerId} -> ${grantsAccess ? tier : "free"}`);
             break;
           }
 

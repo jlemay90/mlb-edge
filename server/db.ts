@@ -90,3 +90,61 @@ export async function getUserByOpenId(openId: string) {
 }
 
 // TODO: add feature queries here as your schema grows.
+
+// ─── Subscription helpers ──────────────────────────────────────────────────
+
+export type SubscriptionInfo = {
+  tier: "free" | "pro" | "sharp";
+  status: string | null;
+  periodEnd: Date | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+};
+
+/**
+ * Resolve a user's subscription info by openId. Ensures a DB row exists
+ * (the OAuth SDK user may not yet be persisted) and defaults to free tier.
+ */
+export async function getSubscriptionByOpenId(
+  openId: string,
+  fallback?: { name?: string | null; email?: string | null; loginMethod?: string | null }
+): Promise<SubscriptionInfo> {
+  const db = await getDb();
+  const freeDefault: SubscriptionInfo = {
+    tier: "free",
+    status: "active",
+    periodEnd: null,
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
+  };
+  if (!db) return freeDefault;
+
+  let row = await getUserByOpenId(openId);
+  if (!row) {
+    // Persist the user so future Stripe webhooks can attach a tier.
+    await upsertUser({
+      openId,
+      name: fallback?.name ?? null,
+      email: fallback?.email ?? null,
+      loginMethod: fallback?.loginMethod ?? null,
+      lastSignedIn: new Date(),
+    });
+    row = await getUserByOpenId(openId);
+  }
+  if (!row) return freeDefault;
+
+  return {
+    tier: (row.subscriptionTier as SubscriptionInfo["tier"]) ?? "free",
+    status: row.subscriptionStatus ?? "active",
+    periodEnd: row.subscriptionPeriodEnd ?? null,
+    stripeCustomerId: row.stripeCustomerId ?? null,
+    stripeSubscriptionId: row.stripeSubscriptionId ?? null,
+  };
+}
+
+/** Update a user's Stripe customer id (called from checkout/webhook). */
+export async function setStripeCustomerId(openId: string, customerId: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ stripeCustomerId: customerId }).where(eq(users.openId, openId));
+}

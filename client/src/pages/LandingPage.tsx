@@ -364,25 +364,43 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border bg-muted/10">
-        <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-7 h-7 rounded bg-primary">
-              <Zap className="w-3.5 h-3.5 text-primary-foreground" />
+        <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-7 h-7 rounded bg-primary">
+                <Zap className="w-3.5 h-3.5 text-primary-foreground" />
+              </div>
+              <span className="font-bold text-sm text-foreground">MLB Edge</span>
+              <span className="text-xs text-muted-foreground">© 2026</span>
             </div>
-            <span className="font-bold text-sm text-foreground">MLB Edge</span>
-            <span className="text-xs text-muted-foreground">© 2026</span>
+            <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+              <button onClick={() => setLocation("/pricing")} className="hover:text-foreground transition-colors">
+                Pricing
+              </button>
+              <button onClick={() => setLocation("/terms")} className="hover:text-foreground transition-colors">
+                Terms
+              </button>
+              <button onClick={() => setLocation("/privacy")} className="hover:text-foreground transition-colors">
+                Privacy
+              </button>
+              <button onClick={() => setLocation("/refunds")} className="hover:text-foreground transition-colors">
+                Refunds
+              </button>
+              <button onClick={() => setLocation("/responsible-gambling")} className="hover:text-foreground transition-colors">
+                Responsible Gambling
+              </button>
+              <button onClick={handleLogin} className="hover:text-foreground transition-colors">
+                Sign In
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <button onClick={() => setLocation("/pricing")} className="hover:text-foreground transition-colors">
-              Pricing
-            </button>
-            <button onClick={handleLogin} className="hover:text-foreground transition-colors">
-              Sign In
-            </button>
-            <button onClick={handleGetStarted} className="hover:text-foreground transition-colors">
-              Get Started
-            </button>
-          </div>
+          <p className="text-[11px] leading-relaxed text-muted-foreground/80 text-center md:text-left">
+            MLB Edge provides statistical analysis for informational and entertainment purposes only.
+            It is not betting or financial advice, and no outcome is guaranteed. Past and backtested
+            results do not guarantee future performance. You must be 21+ (or legal age in your
+            jurisdiction) to use this service. Please bet responsibly. Gambling problem? Call
+            1-800-GAMBLER. Not affiliated with or endorsed by Major League Baseball.
+          </p>
         </div>
       </footer>
     </div>

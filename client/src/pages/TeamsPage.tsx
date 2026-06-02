@@ -11,6 +11,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine,
 } from "recharts";
 import { TrendingUp, TrendingDown, Minus, Search, Trophy, Target, Zap } from "lucide-react";
+import { RequireTier } from "@/components/RequireTier";
 
 type SortKey = "winPct" | "runsPerGame" | "era" | "fip" | "wrcPlus" | "ops" | "whip";
 
@@ -111,6 +112,7 @@ export default function TeamsPage() {
 
   return (
     <AppLayout>
+      <RequireTier tier="pro" featureName="Team stats explorer">
       <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -452,6 +454,7 @@ export default function TeamsPage() {
           </TabsContent>
         </Tabs>
       </div>
+      </RequireTier>
     </AppLayout>
   );
 }

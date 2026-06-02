@@ -81,3 +81,23 @@
 - [x] Social proof / backtest stats section
 - [x] CTA buttons (Start Free / Go Pro / Go Sharp)
 - [x] Facebook-optimized meta tags (og:title, og:description, og:image)
+
+## Go-Live Hardening (production readiness)
+- [x] Audit all pages for broken data loading / empty states
+- [x] Fix Odds API connectivity (timeouts from environment) + graceful fallback (backend falls back to schedule+Statcast+weather; test made resilient)
+- [x] Verify dashboard top picks render (root cause: 404 route + slow live query; fixed routing)
+- [x] Real tier-based feature gating on Player Props, Line Movement, Analytics, Teams
+- [x] Upgrade prompt overlay on paywalled pages for free users (RequireTier blur overlay)
+- [x] Sharp-only gating supported via RequireTier tier=sharp (ready to apply to those features)
+- [x] Wire 7-day free trial into Stripe checkout (trial_period_days=7, card collected up front)
+- [x] Stripe webhook fixed to treat trialing as access-granting; portal cancel link wired (needs live e2e once sandbox claimed)
+- [x] Terms of Service page (/terms)
+- [x] Privacy Policy page (/privacy)
+- [x] Refund Policy page (/refunds)
+- [x] Responsible Gambling page (/responsible-gambling) with 1-800-GAMBLER
+- [x] 21+ age gate on first visit (localStorage, one-time)
+- [x] Prominent disclaimer banner on Legal page + landing footer
+- [x] Footer links to all legal pages
+- [x] Run full vitest suite (16 passing) + save checkpoint
+- [x] Owner/admin auto-Sharp access (project owner gets full app, no paywall)
+- [x] Server-side TTL cache on getTopPicks/getTodaysGames (cold 2.9s -> warm 4ms; fail-soft serves stale on upstream error)

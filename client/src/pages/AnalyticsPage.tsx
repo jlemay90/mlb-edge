@@ -1,6 +1,7 @@
 import AppLayout from "@/components/AppLayout";
 import { trpc } from "@/lib/trpc";
 import { BarChart3, TrendingUp, RefreshCw, Trophy, Target, Zap } from "lucide-react";
+import { RequireTier } from "@/components/RequireTier";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -81,6 +82,7 @@ export default function AnalyticsPage() {
 
   return (
     <AppLayout>
+      <RequireTier tier="pro" featureName="Model analytics">
       <div className="p-6 max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
@@ -263,6 +265,7 @@ export default function AnalyticsPage() {
           </>
         )}
       </div>
+      </RequireTier>
     </AppLayout>
   );
 }

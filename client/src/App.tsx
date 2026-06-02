@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Dashboard from "./pages/Dashboard";
+import HomeGate from "./pages/HomeGate";
 import GamesPage from "./pages/GamesPage";
 import PropsPage from "./pages/PropsPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
@@ -14,11 +15,15 @@ import LineMovementPage from "./pages/LineMovementPage";
 import PricingPage from "./pages/PricingPage";
 import BillingPage from "./pages/BillingPage";
 import LandingPage from "./pages/LandingPage";
+import LegalPage from "./pages/LegalPage";
+import { AgeGate } from "./components/AgeGate";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
+      <Route path="/" component={HomeGate} />
+      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/app" component={Dashboard} />
       <Route path="/games" component={GamesPage} />
       <Route path="/games/:gamePk" component={GameDetailPage} />
       <Route path="/props" component={PropsPage} />
@@ -28,6 +33,11 @@ function Router() {
       <Route path="/pricing" component={PricingPage} />
       <Route path="/billing" component={BillingPage} />
       <Route path="/landing" component={LandingPage} />
+      <Route path="/legal" component={LegalPage} />
+      <Route path="/terms" component={LegalPage} />
+      <Route path="/privacy" component={LegalPage} />
+      <Route path="/refunds" component={LegalPage} />
+      <Route path="/responsible-gambling" component={LegalPage} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -40,6 +50,7 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
+          <AgeGate />
           <Router />
         </TooltipProvider>
       </ThemeProvider>
