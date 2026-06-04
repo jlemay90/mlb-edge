@@ -24,6 +24,41 @@ export type SessionPayload = {
   name: string;
 };
 
+/**
+ * State format used in OAuth flow.
+ * The state is base64-encoded and passed through the OAuth server unchanged.
+ * We support two formats:
+ *   - Legacy: btoa(redirectUri)  — a plain URL string
+ *   - New:    btoa(JSON.stringify({redirectUri, returnTo})) — includes cross-domain returnTo
+ */
+export type OAuthState = {
+  redirectUri: string;
+  returnTo?: string; // origin to redirect back to after callback (for cross-domain flows)
+};
+
+export function encodeOAuthState(state: OAuthState): string {
+  return btoa(JSON.stringify(state));
+}
+
+export function decodeOAuthState(state: string): OAuthState {
+  try {
+    const decoded = atob(state);
+    // Try JSON parse first (new format)
+    try {
+      const parsed = JSON.parse(decoded);
+      if (parsed && typeof parsed.redirectUri === "string") {
+        return parsed as OAuthState;
+      }
+    } catch {
+      // Not JSON — fall through to legacy format
+    }
+    // Legacy format: the decoded string IS the redirectUri
+    return { redirectUri: decoded };
+  } catch {
+    return { redirectUri: "" };
+  }
+}
+
 const EXCHANGE_TOKEN_PATH = `/webdev.v1.WebDevAuthPublicService/ExchangeToken`;
 const GET_USER_INFO_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfo`;
 const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfoWithJwt`;
@@ -38,20 +73,16 @@ class OAuthService {
     }
   }
 
-  private decodeState(state: string): string {
-    const redirectUri = atob(state);
-    return redirectUri;
-  }
-
   async getTokenByCode(
     code: string,
     state: string
   ): Promise<ExchangeTokenResponse> {
+    const { redirectUri } = decodeOAuthState(state);
     const payload: ExchangeTokenRequest = {
       clientId: ENV.appId,
       grantType: "authorization_code",
       code,
-      redirectUri: this.decodeState(state),
+      redirectUri,
     };
 
     const { data } = await this.client.post<ExchangeTokenResponse>(

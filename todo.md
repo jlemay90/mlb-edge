@@ -101,3 +101,6 @@
 - [x] Run full vitest suite (16 passing) + save checkpoint
 - [x] Owner/admin auto-Sharp access (project owner gets full app, no paywall)
 - [x] Server-side TTL cache on getTopPicks/getTodaysGames (cold 2.9s -> warm 4ms; fail-soft serves stale on upstream error)
+
+## OAuth / Auth Fixes
+- [x] Fix OAuth callback failure for new users on custom domain (intelligentbettingmlbedgepicks.com) — implemented cross-domain handoff: canonical manus.space callback URL always used for OAuth, returnTo encoded in state, /api/oauth/handoff endpoint sets session cookie on custom domain after redirect
