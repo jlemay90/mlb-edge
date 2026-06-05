@@ -1,28 +1,34 @@
 // MLB Edge — Stripe Product & Price Configuration
-// These price IDs should be created in your Stripe Dashboard.
-// In test mode, use the test price IDs below (prefixed with price_test_).
-// In live mode, replace with live price IDs from your Stripe Dashboard.
+// LIVE mode prices (created 2026-06-04/05)
+// Products: prod_Ue6sfnk59m7R8N (Pro), prod_Ue6sAEo82YWmBo (Sharp)
+//
+// Pricing model:
+//   Pro:   $5 for 7-day trial → $10 first month → $29/mo ongoing
+//   Sharp: 3-day FREE trial   → $40 first month → $79/mo ongoing  (Limited time)
+//   Annual promos remain unchanged
 
 export type SubscriptionTier = "free" | "pro" | "sharp";
 
 export interface TierConfig {
   name: string;
   tier: SubscriptionTier;
-  monthlyPriceId: string;
+  monthlyPriceId: string;       // ongoing monthly price
   annualPriceId: string;
-  monthlyPrice: number;      // promo monthly price in cents
-  monthlyRegPrice?: number;  // regular monthly price in cents (shown crossed out)
-  annualPrice: number;       // promo annual price in cents
-  annualRegPrice?: number;   // regular annual price in cents (shown crossed out)
-  annualSavings?: number;    // savings vs regular annual in cents
-  promoMonths?: number;      // how many months the monthly promo applies
+  introMonthlyPriceId?: string; // first-month intro price (after trial)
+  trialDays?: number;           // trial length in days
+  trialPrice?: number;          // cost of trial in cents (0 = free)
+  monthlyPrice: number;         // ongoing monthly price in cents
+  monthlyRegPrice?: number;     // regular monthly (shown crossed out)
+  introMonthlyPrice?: number;   // first-month price in cents
+  annualPrice: number;
+  annualRegPrice?: number;
+  annualSavings?: number;
   description: string;
   features: string[];
   badge?: string;
+  limitedTime?: boolean;        // show "Limited time only" badge
 }
 
-// Stripe price IDs (LIVE mode, created 2026-06-04)
-// Products: prod_Ue6sfnk59m7R8N (Pro), prod_Ue6sAEo82YWmBo (Sharp)
 export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
   free: {
     name: "Free",
@@ -31,12 +37,11 @@ export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
     annualPriceId: "",
     monthlyPrice: 0,
     annualPrice: 0,
-    description: "Get started with basic MLB picks",
+    description: "Teaser access — upgrade to unlock everything",
     features: [
-      "Today's top 3 picks (money line only)",
+      "Today's top pick (title only, no analysis)",
       "Basic game schedule",
-      "Team standings",
-      "Limited to 1 game detail per day",
+      "Team standings (no stats)",
     ],
   },
   pro: {
@@ -44,14 +49,15 @@ export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
     tier: "pro",
     monthlyPriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || "price_1TeofDANxPVrfK4rTugeM1Hg",
     annualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || "price_1TeofGANxPVrfK4rvWsKf87C",
-    // Promo: $19/mo for first 3 months (reg $29/mo), then $29/mo
-    // Annual promo: $175/yr first year (reg $348/yr = $29×12), saves $173
-    monthlyPrice: 1900,       // $19/mo promo (reg $2900)
-    monthlyRegPrice: 2900,    // $29/mo regular
-    annualPrice: 17500,       // $175/yr promo (reg $34800)
-    annualRegPrice: 34800,    // $348/yr regular
-    annualSavings: 17300,     // saves $173 first year
-    promoMonths: 3,           // promo applies for 3 months
+    introMonthlyPriceId: process.env.STRIPE_PRO_INTRO_PRICE_ID || "price_1Tep0yANxPVrfK4rb2bYIAXl",
+    trialDays: 7,
+    trialPrice: 500,            // $5 for 7-day trial
+    introMonthlyPrice: 1000,    // $10 first full month
+    monthlyPrice: 2900,         // $29/mo ongoing
+    monthlyRegPrice: 2900,
+    annualPrice: 17500,         // $175/yr promo
+    annualRegPrice: 34800,      // $348/yr regular
+    annualSavings: 17300,
     description: "Full access for serious bettors",
     badge: "Most Popular",
     features: [
@@ -70,16 +76,18 @@ export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
     tier: "sharp",
     monthlyPriceId: process.env.STRIPE_SHARP_MONTHLY_PRICE_ID || "price_1TeofIANxPVrfK4rtQGDYTk0",
     annualPriceId: process.env.STRIPE_SHARP_ANNUAL_PRICE_ID || "price_1TeofLANxPVrfK4rGJJvzzQ4",
-    // Promo: $69/mo for first 3 months (reg $79/mo), then $79/mo
-    // Annual promo: $500/yr first year (reg $948/yr = $79×12), saves $448
-    monthlyPrice: 6900,       // $69/mo promo (reg $7900)
-    monthlyRegPrice: 7900,    // $79/mo regular
-    annualPrice: 50000,       // $500/yr promo (reg $94800)
-    annualRegPrice: 94800,    // $948/yr regular
-    annualSavings: 44800,     // saves $448 first year
-    promoMonths: 3,           // promo applies for 3 months
-    description: "For professional-grade edge hunting",
-    badge: "Best Value",
+    introMonthlyPriceId: process.env.STRIPE_SHARP_INTRO_PRICE_ID || "price_1Tep10ANxPVrfK4rs0e8Ewhi",
+    trialDays: 3,
+    trialPrice: 0,              // FREE 3-day trial
+    introMonthlyPrice: 4000,    // $40 first full month
+    monthlyPrice: 7900,         // $79/mo ongoing
+    monthlyRegPrice: 7900,
+    annualPrice: 50000,         // $500/yr promo
+    annualRegPrice: 94800,      // $948/yr regular
+    annualSavings: 44800,
+    description: "Professional-grade edge hunting",
+    badge: "For Serious Players",
+    limitedTime: true,
     features: [
       "Everything in Pro",
       "Parlay builder with correlated picks",
@@ -94,13 +102,16 @@ export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
 };
 
 // Feature gates — which features require which tier
+// Free tier is now a teaser only — almost everything requires Pro+
 export const TIER_GATES = {
   allPicks: "pro" as SubscriptionTier,
+  pickAnalysis: "pro" as SubscriptionTier,   // rationale/analysis text
+  pickOdds: "pro" as SubscriptionTier,        // odds/lines on picks
   playerProps: "pro" as SubscriptionTier,
   lineMovement: "pro" as SubscriptionTier,
   gameDetail: "pro" as SubscriptionTier,
-  teamExplorer: "free" as SubscriptionTier,
-  analytics: "free" as SubscriptionTier,
+  teamStats: "pro" as SubscriptionTier,       // was free, now pro
+  analytics: "pro" as SubscriptionTier,       // was free, now pro
   parlayBuilder: "sharp" as SubscriptionTier,
   moonshotProps: "sharp" as SubscriptionTier,
   steamAlerts: "sharp" as SubscriptionTier,

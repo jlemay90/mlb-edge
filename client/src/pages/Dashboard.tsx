@@ -1,5 +1,8 @@
 import AppLayout from "@/components/AppLayout";
 import { trpc } from "@/lib/trpc";
+import { useAccount } from "@/hooks/useAccount";
+import { Lock } from "lucide-react";
+import { useLocation } from "wouter";
 import { Link } from "wouter";
 import {
   TrendingUp,
@@ -172,6 +175,9 @@ function StatCard({
 
 export default function Dashboard() {
   const today = new Date().toISOString().split("T")[0];
+  const { isPro, isSharp, loading: accountLoading } = useAccount();
+  const isPaid = isPro || isSharp;
+  const [, navigate] = useLocation();
 
   const {
     data: topPicks,
@@ -184,6 +190,10 @@ export default function Dashboard() {
   const aGrade = topPicks?.filter((p: any) => p.confidenceTier === "A") || [];
   const bGrade = topPicks?.filter((p: any) => p.confidenceTier === "B") || [];
   const totalGames = games?.length || 0;
+
+  // Free tier: show only 1 pick (title only), blur the rest
+  const visiblePicks = isPaid ? (topPicks || []) : (topPicks || []).slice(0, 1);
+  const hiddenPickCount = isPaid ? 0 : Math.max(0, (topPicks?.length || 0) - 1);
 
   const formattedDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -277,10 +287,53 @@ export default function Dashboard() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {topPicks.slice(0, 12).map((pick: any, i: number) => (
-                <PickCard key={`${pick.gamePk}-${pick.market}-${i}`} pick={pick} />
-              ))}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {/* Free tier: show 1 pick title-only (no analysis) */}
+                {visiblePicks.slice(0, 12).map((pick: any, i: number) => (
+                  isPaid ? (
+                    <PickCard key={`${pick.gamePk}-${pick.market}-${i}`} pick={pick} />
+                  ) : (
+                    // Free tier: title only, no odds/analysis/bars
+                    <div key={`${pick.gamePk}-${pick.market}-${i}`} className="pick-card bg-card border border-border rounded-xl p-4 flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold tracking-wider tier-a">{pick.confidenceTier}</span>
+                      </div>
+                      <div className="text-sm font-semibold text-foreground">{pick.pickLabel}</div>
+                      <div className="text-xs text-muted-foreground">{pick.awayAbbr || pick.awayTeam?.split(" ").pop()} @ {pick.homeAbbr || pick.homeTeam?.split(" ").pop()}</div>
+                      <div className="mt-1 text-xs text-muted-foreground italic">Analysis hidden — upgrade to view</div>
+                    </div>
+                  )
+                ))}
+              </div>
+
+              {/* Paywall overlay for free users */}
+              {!isPaid && !accountLoading && hiddenPickCount > 0 && (
+                <div className="relative rounded-xl overflow-hidden">
+                  {/* Blurred ghost picks */}
+                  <div className="pointer-events-none select-none blur-md opacity-30 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" aria-hidden>
+                    {Array.from({ length: Math.min(hiddenPickCount, 8) }).map((_, i) => (
+                      <div key={i} className="pick-card bg-card border border-border rounded-xl p-4 h-40" />
+                    ))}
+                  </div>
+                  {/* Upgrade CTA */}
+                  <div className="absolute inset-0 flex items-center justify-center p-6">
+                    <div className="bg-card border border-primary/40 rounded-2xl p-6 max-w-sm text-center shadow-xl">
+                      <div className="mx-auto mb-3 w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center">
+                        <Lock className="w-5 h-5 text-primary" />
+                      </div>
+                      <h3 className="text-base font-bold text-foreground">{hiddenPickCount} more picks hidden</h3>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        Start your 7-day Pro trial for $5 to unlock all picks, odds, analysis, and player props.
+                      </p>
+                      <Button className="mt-4 gap-2 w-full" size="sm" onClick={() => navigate("/pricing")}>
+                        <Zap className="w-3.5 h-3.5" />
+                        Start Trial — $5
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

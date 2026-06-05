@@ -8,58 +8,36 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Check, Zap, TrendingUp, Crown, Tag } from "lucide-react";
+import { Check, Zap, Crown, Tag, Clock, Flame } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 
 // ─── Pricing constants ────────────────────────────────────────────────────────
-// Regular prices (shown as crossed-out "usual" price)
-const REG_PRO_MONTHLY = 29;
-const REG_SHARP_MONTHLY = 79;
-
-// Promo monthly prices — $10/mo off for first 3 months
-const PROMO_PRO_MONTHLY = 19;
+// Trial pricing model
+const PRO_TRIAL_PRICE = 5;        // $5 for 7-day trial
+const PRO_INTRO_MONTHLY = 10;     // $10 first full month after trial
+const REG_PRO_MONTHLY = 29;       // $29/mo ongoing
+const PROMO_PRO_MONTHLY = 19;     // kept for promo display
 const PROMO_SHARP_MONTHLY = 69;
-
-// Annual promo prices — first year only
 const PROMO_PRO_ANNUAL = 175;
 const PROMO_SHARP_ANNUAL = 500;
-
-// Regular annual (what they'd pay after promo year, at reg monthly × 12)
 const REG_PRO_ANNUAL = REG_PRO_MONTHLY * 12;       // $348
-const REG_SHARP_ANNUAL = REG_SHARP_MONTHLY * 12;   // $948
-
-// Savings
-const PRO_ANNUAL_SAVINGS = REG_PRO_ANNUAL - PROMO_PRO_ANNUAL;       // $173
-const SHARP_ANNUAL_SAVINGS = REG_SHARP_ANNUAL - PROMO_SHARP_ANNUAL; // $448
+const REG_SHARP_ANNUAL = 79 * 12;                  // $948
+const PRO_ANNUAL_SAVINGS = REG_PRO_ANNUAL - PROMO_PRO_ANNUAL;
+const SHARP_ANNUAL_SAVINGS = REG_SHARP_ANNUAL - PROMO_SHARP_ANNUAL;
+const SHARP_INTRO_MONTHLY = 40;   // $40 first full month after 3-day free trial
+const REG_SHARP_MONTHLY = 79;
 
 const TIERS = [
-  {
-    name: "Free",
-    tier: "free",
-    icon: TrendingUp,
-    color: "border-border",
-    badge: null,
-    description: "Get started with basic MLB picks",
-    regMonthly: 0,
-    promoMonthly: 0,
-    promoAnnual: 0,
-    regAnnual: 0,
-    annualSavings: 0,
-    buttonVariant: "outline" as const,
-    features: [
-      "Today's top 3 picks (money line only)",
-      "Basic game schedule",
-      "Team standings",
-      "Limited to 1 game detail per day",
-    ],
-  },
   {
     name: "Pro",
     tier: "pro",
     icon: Zap,
     color: "border-primary ring-1 ring-primary",
     badge: "Most Popular",
+    limitedTime: false,
+    trialLabel: `7-Day Trial — $${PRO_TRIAL_PRICE}`,
+    trialSub: `Then $${PRO_INTRO_MONTHLY}/mo first month, $${REG_PRO_MONTHLY}/mo after`,
     description: "Full access for serious bettors",
     regMonthly: REG_PRO_MONTHLY,
     promoMonthly: PROMO_PRO_MONTHLY,
@@ -82,9 +60,12 @@ const TIERS = [
     name: "Sharp",
     tier: "sharp",
     icon: Crown,
-    color: "border-yellow-500/50",
-    badge: "Best Value",
-    description: "For professional-grade edge hunting",
+    color: "border-yellow-500/60 ring-1 ring-yellow-500/30",
+    badge: "For Serious Players",
+    limitedTime: true,
+    trialLabel: "3-Day FREE Trial",
+    trialSub: `Then $${SHARP_INTRO_MONTHLY}/mo first month, $${REG_SHARP_MONTHLY}/mo after`,
+    description: "Professional-grade edge hunting",
     regMonthly: REG_SHARP_MONTHLY,
     promoMonthly: PROMO_SHARP_MONTHLY,
     promoAnnual: PROMO_SHARP_ANNUAL,
@@ -183,24 +164,32 @@ export default function PricingPage() {
         </div>
 
         {/* Tier cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
           {TIERS.map((tier) => {
             const Icon = tier.icon;
             const isPro = tier.tier === "pro";
             const isSharp = tier.tier === "sharp";
-            const isFree = tier.tier === "free";
             const isCurrentTier = currentTier === tier.tier;
 
             // Displayed price
-            const displayPrice = annual && !isFree ? tier.promoAnnual : (!isFree ? tier.promoMonthly : 0);
-            const perMonth = annual && !isFree ? Math.round(tier.promoAnnual / 12) : tier.promoMonthly;
+            const displayPrice = annual ? tier.promoAnnual : tier.promoMonthly;
+            const perMonth = annual ? Math.round(tier.promoAnnual / 12) : tier.promoMonthly;
 
             return (
               <Card
                 key={tier.tier}
                 className={`relative bg-card ${tier.color} transition-all hover:shadow-lg hover:shadow-primary/10`}
               >
-                {tier.badge && (
+                {/* Limited time banner */}
+                {tier.limitedTime && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                    <span className="flex items-center gap-1 bg-yellow-500 text-black text-xs font-bold px-3 py-1 rounded-full shadow-lg whitespace-nowrap">
+                      <Flame className="w-3 h-3" />
+                      Limited Time Only
+                    </span>
+                  </div>
+                )}
+                {!tier.limitedTime && tier.badge && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <Badge
                       className={`text-xs px-3 py-1 ${
@@ -227,8 +216,18 @@ export default function PricingPage() {
                     )}
                   </div>
 
+                  {/* Trial pricing block */}
+                  {tier.trialLabel && (
+                    <div className="bg-muted/50 rounded-lg p-3 border border-border/50 mb-3">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <Clock className="w-4 h-4 text-primary" />
+                        <span className="font-bold text-base text-primary">{tier.trialLabel}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{tier.trialSub}</p>
+                    </div>
+                  )}
                   <div className="space-y-1">
-                    {isFree ? (
+                    {false ? (
                       <div className="text-3xl font-bold text-foreground">Free</div>
                     ) : (
                       <>
@@ -282,11 +281,7 @@ export default function PricingPage() {
                     ))}
                   </ul>
 
-                  {isFree ? (
-                    <Button variant="outline" className="w-full" onClick={() => setLocation("/")}>
-                      {user ? "You're on Free" : "Get Started Free"}
-                    </Button>
-                  ) : isCurrentTier ? (
+                  {isCurrentTier ? (
                     <Button variant="outline" className="w-full" disabled>
                       Current Plan
                     </Button>
@@ -303,7 +298,9 @@ export default function PricingPage() {
                     >
                       {createCheckout.isPending
                         ? "Loading..."
-                        : `Upgrade to ${tier.name} — $${annual ? tier.promoAnnual + "/yr" : displayPrice + "/mo"}`}
+                        : isPro
+                        ? "Start 7-Day Trial — $5"
+                        : "Start FREE 3-Day Trial"}
                     </Button>
                   )}
                 </CardContent>
@@ -316,7 +313,10 @@ export default function PricingPage() {
         <div className="bg-muted/20 border border-border rounded-lg p-4 text-xs text-muted-foreground space-y-1 max-w-2xl mx-auto">
           <p className="font-semibold text-foreground text-sm">Promo Details</p>
           <p>
-            <span className="text-yellow-400">Monthly promo:</span> First 3 months at $10/mo off. Pro billed at $19/mo × 3, then $29/mo. Sharp billed at $69/mo × 3, then $79/mo.
+            <span className="text-yellow-400">Pro trial:</span> $5 charge for 7-day access. After trial: $10 first full month, then $29/mo ongoing.
+          </p>
+          <p>
+            <span className="text-yellow-400">Sharp trial:</span> FREE 3-day trial (limited time). After trial: $40 first full month, then $79/mo ongoing.
           </p>
           <p>
             <span className="text-yellow-400">Annual promo:</span> First year at the promo rate ($175 for Pro, $500 for Sharp). Renews at regular annual rate ($348 for Pro, $948 for Sharp) after year 1. Cancel anytime before renewal.

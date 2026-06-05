@@ -114,7 +114,7 @@ export default function BillingPage() {
                     MLB Edge {TIER_LABELS[tier]}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {tier === "free" && "Basic access — upgrade for full picks"}
+                    {tier === "free" && "Teaser access — start your trial to unlock everything"}
                     {tier === "pro" && "Full picks, props, line movement, analytics"}
                     {tier === "sharp" && "Professional-grade edge hunting + parlay builder"}
                   </div>
@@ -177,7 +177,7 @@ export default function BillingPage() {
                 <>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                    Today's top 3 picks (money line only)
+                    Today's top pick (title only, no analysis)
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <CheckCircle className="h-4 w-4 text-muted-foreground" />
@@ -185,7 +185,11 @@ export default function BillingPage() {
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                    Team standings
+                    Team standings (no stats)
+                  </div>
+                  <div className="mt-3 p-3 bg-primary/10 border border-primary/30 rounded-lg">
+                    <p className="text-xs text-primary font-medium">Start your 7-day Pro trial for just $5 — full picks, props, and analytics.</p>
+                    <Button size="sm" className="mt-2 h-7 text-xs" onClick={() => setLocation("/pricing")}>Start Trial — $5</Button>
                   </div>
                 </>
               )}
