@@ -21,8 +21,8 @@ export interface TierConfig {
   badge?: string;
 }
 
-// Stripe price IDs (test mode, created 2026-06-04)
-// Products: prod_UdyTdzdwvKJYDb (Pro), prod_UdyTZka8g0NC9u (Sharp)
+// Stripe price IDs (LIVE mode, created 2026-06-04)
+// Products: prod_Ue6sfnk59m7R8N (Pro), prod_Ue6sAEo82YWmBo (Sharp)
 export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
   free: {
     name: "Free",
@@ -42,8 +42,8 @@ export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
   pro: {
     name: "Pro",
     tier: "pro",
-    monthlyPriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || "price_1TegX2A3zbEeE9N8I1FpwC6M",
-    annualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || "price_1TegX4A3zbEeE9N8SpCJQxvm",
+    monthlyPriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || "price_1TeofDANxPVrfK4rTugeM1Hg",
+    annualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || "price_1TeofGANxPVrfK4rvWsKf87C",
     // Promo: $19/mo for first 3 months (reg $29/mo), then $29/mo
     // Annual promo: $175/yr first year (reg $348/yr = $29×12), saves $173
     monthlyPrice: 1900,       // $19/mo promo (reg $2900)
@@ -68,8 +68,8 @@ export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
   sharp: {
     name: "Sharp",
     tier: "sharp",
-    monthlyPriceId: process.env.STRIPE_SHARP_MONTHLY_PRICE_ID || "price_1TegXEA3zbEeE9N8pNAjxIeA",
-    annualPriceId: process.env.STRIPE_SHARP_ANNUAL_PRICE_ID || "price_1TegXGA3zbEeE9N8JegQONej",
+    monthlyPriceId: process.env.STRIPE_SHARP_MONTHLY_PRICE_ID || "price_1TeofIANxPVrfK4rtQGDYTk0",
+    annualPriceId: process.env.STRIPE_SHARP_ANNUAL_PRICE_ID || "price_1TeofLANxPVrfK4rGJJvzzQ4",
     // Promo: $69/mo for first 3 months (reg $79/mo), then $79/mo
     // Annual promo: $500/yr first year (reg $948/yr = $79×12), saves $448
     monthlyPrice: 6900,       // $69/mo promo (reg $7900)
