@@ -157,14 +157,14 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <Button size="lg" onClick={handleGetStarted} className="gap-2 text-base px-8">
                 <Zap className="h-5 w-5" />
-                Start Free Today
+                Start 7-Day Trial — $5
               </Button>
               <Button size="lg" variant="outline" onClick={() => setLocation("/pricing")} className="gap-2 text-base">
                 View Pricing
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              No credit card required for free tier. Cancel Pro/Sharp anytime.
+              Pro: 7-day trial for $5, then $10 first month, then $29/mo. Sharp: 3-day free trial, then $40 first month. Cancel anytime.
             </p>
           </div>
         </div>
@@ -260,37 +260,31 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto px-4 py-16 space-y-8">
           <div className="text-center space-y-3">
             <h2 className="text-3xl font-bold text-foreground">Simple, Transparent Pricing</h2>
-            <p className="text-muted-foreground">Start free. Upgrade when you're ready to go all-in.</p>
+            <p className="text-muted-foreground">Try it first. Upgrade when you're winning.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
           {[
             {
-              name: "Free",
-              price: "$0",
-              promoNote: null,
-              features: ["Top 3 daily picks", "Game schedule", "Team standings"],
-              cta: "Start Free",
-              highlight: false,
-            },
-            {
               name: "Pro",
-              price: "$19/mo",
-              regPrice: "$29/mo",
-              promoNote: "$10/mo off first 3 months — then $29/mo",
+              price: "$5",
+              priceSub: "7-day trial",
+              promoNote: "Then $10 first month — $29/mo after",
               annualPromo: "or $175/yr (save $173 first year)",
-              features: ["All picks (ML/RL/O-U)", "Player props", "Line movement", "Game detail"],
-              cta: "Go Pro — $19/mo",
+              features: ["All picks (ML/RL/O-U)", "Player props", "Line movement", "Full game analysis"],
+              cta: "Start Pro Trial — $5",
               highlight: true,
+              badge: "Most Popular",
             },
             {
               name: "Sharp",
-              price: "$69/mo",
-              regPrice: "$79/mo",
-              promoNote: "$10/mo off first 3 months — then $79/mo",
+              price: "FREE",
+              priceSub: "3-day trial",
+              promoNote: "Then $40 first month — $79/mo after",
               annualPromo: "or $500/yr (save $448 first year)",
               features: ["Everything in Pro", "Parlay builder", "Moonshot HR props", "Steam alerts"],
-              cta: "Go Sharp — $69/mo",
+              cta: "Start Sharp Trial — Free",
               highlight: false,
+              badge: "⚡ Limited Time Only",
             },
           ].map((tier) => (
               <Card
@@ -298,16 +292,18 @@ export default function LandingPage() {
                 className={`${tier.highlight ? "border-primary ring-1 ring-primary" : "border-border"} bg-card`}
               >
                 <CardContent className="p-5 space-y-4">
-                  {tier.highlight && (
-                    <Badge className="bg-primary text-primary-foreground text-xs">Most Popular</Badge>
+                  {(tier as any).badge && (
+                    <Badge className={`text-xs ${
+                      tier.highlight
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+                    }`}>{(tier as any).badge}</Badge>
                   )}
                   <div>
                     <div className="font-bold text-lg text-foreground">{tier.name}</div>
                     <div className="flex items-baseline gap-2 mt-1">
                       <span className="text-2xl font-extrabold text-foreground">{tier.price}</span>
-                      {(tier as any).regPrice && (
-                        <span className="text-sm text-muted-foreground line-through">{(tier as any).regPrice}</span>
-                      )}
+                      <span className="text-sm text-muted-foreground">{(tier as any).priceSub}</span>
                     </div>
                     {(tier as any).promoNote && (
                       <p className="text-xs text-yellow-400/80 mt-1">{(tier as any).promoNote}</p>
@@ -344,13 +340,13 @@ export default function LandingPage() {
           Ready to Find Your Edge?
         </h2>
         <p className="text-muted-foreground max-w-lg mx-auto">
-          Join MLB Edge today. Start free, upgrade when you're winning. Our model is live for the
+          Join MLB Edge today. Try Pro for $5 or Sharp free for 3 days. Our model is live for the
           2026 season — don't bet blind.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Button size="lg" onClick={handleGetStarted} className="gap-2 text-base px-10">
             <Zap className="h-5 w-5" />
-            Get Started Free
+            Start Your Trial
           </Button>
           <Button size="lg" variant="outline" onClick={handleLogin} className="gap-2 text-base">
             Sign In
