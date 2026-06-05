@@ -324,11 +324,11 @@ export default function Dashboard() {
                       </div>
                       <h3 className="text-base font-bold text-foreground">{hiddenPickCount} more picks hidden</h3>
                       <p className="text-muted-foreground mt-1 text-xs">
-                        Start your 7-day Pro trial for $5 to unlock all picks, odds, analysis, and player props.
+                        Start Pro for $9.99 to unlock all picks, odds, analysis, and player props.
                       </p>
                       <Button className="mt-4 gap-2 w-full" size="sm" onClick={() => navigate("/pricing")}>
                         <Zap className="w-3.5 h-3.5" />
-                        Start Trial — $5
+                        Start Pro — $9.99
                       </Button>
                     </div>
                   </div>

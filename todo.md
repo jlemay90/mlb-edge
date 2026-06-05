@@ -104,3 +104,7 @@
 
 ## OAuth / Auth Fixes
 - [x] Fix OAuth callback failure for new users on custom domain (intelligentbettingmlbedgepicks.com) — implemented cross-domain handoff: canonical manus.space callback URL always used for OAuth, returnTo encoded in state, /api/oauth/handoff endpoint sets session cookie on custom domain after redirect
+
+## Pinned — Next Session
+- [ ] Add "Contact Support to Cancel" button on billing page (friction before self-serve cancel)
+- [ ] Add Tip Jar feature (one-time payment option for users who want to support the platform)

@@ -14,19 +14,18 @@ import { getLoginUrl } from "@/const";
 
 // ─── Pricing constants ────────────────────────────────────────────────────────
 // Trial pricing model
-const PRO_TRIAL_PRICE = 5;        // $5 for 7-day trial
-const PRO_INTRO_MONTHLY = 10;     // $10 first full month after trial
+const PRO_INTRO_MONTHLY = 9.99;   // $9.99 first month
 const REG_PRO_MONTHLY = 29;       // $29/mo ongoing
 const PROMO_PRO_MONTHLY = 19;     // kept for promo display
-const PROMO_SHARP_MONTHLY = 69;
+const PROMO_SHARP_MONTHLY = 24.99; // $24.99/mo ongoing (limited time)
 const PROMO_PRO_ANNUAL = 175;
 const PROMO_SHARP_ANNUAL = 500;
 const REG_PRO_ANNUAL = REG_PRO_MONTHLY * 12;       // $348
 const REG_SHARP_ANNUAL = 79 * 12;                  // $948
 const PRO_ANNUAL_SAVINGS = REG_PRO_ANNUAL - PROMO_PRO_ANNUAL;
 const SHARP_ANNUAL_SAVINGS = REG_SHARP_ANNUAL - PROMO_SHARP_ANNUAL;
-const SHARP_INTRO_MONTHLY = 40;   // $40 first full month after 3-day free trial
-const REG_SHARP_MONTHLY = 79;
+const SHARP_INTRO_MONTHLY = 30;   // $30 first full month after 3-day free trial
+const REG_SHARP_MONTHLY = 24.99;  // $24.99/mo ongoing (limited time)
 
 const TIERS = [
   {
@@ -36,8 +35,8 @@ const TIERS = [
     color: "border-primary ring-1 ring-primary",
     badge: "Most Popular",
     limitedTime: false,
-    trialLabel: `7-Day Trial — $${PRO_TRIAL_PRICE}`,
-    trialSub: `Then $${PRO_INTRO_MONTHLY}/mo first month, $${REG_PRO_MONTHLY}/mo after`,
+    trialLabel: `Start Pro — $${PRO_INTRO_MONTHLY}`,
+    trialSub: `First month intro price — $${REG_PRO_MONTHLY}/mo after`,
     description: "Full access for serious bettors",
     regMonthly: REG_PRO_MONTHLY,
     promoMonthly: PROMO_PRO_MONTHLY,
@@ -299,7 +298,7 @@ export default function PricingPage() {
                       {createCheckout.isPending
                         ? "Loading..."
                         : isPro
-                        ? "Start 7-Day Trial — $5"
+                        ? "Start Pro — $9.99"
                         : "Start FREE 3-Day Trial"}
                     </Button>
                   )}
@@ -313,10 +312,10 @@ export default function PricingPage() {
         <div className="bg-muted/20 border border-border rounded-lg p-4 text-xs text-muted-foreground space-y-1 max-w-2xl mx-auto">
           <p className="font-semibold text-foreground text-sm">Promo Details</p>
           <p>
-            <span className="text-yellow-400">Pro trial:</span> $5 charge for 7-day access. After trial: $10 first full month, then $29/mo ongoing.
+            <span className="text-yellow-400">Pro intro:</span> $9.99 first month. Then $29/mo ongoing. Cancel anytime.
           </p>
           <p>
-            <span className="text-yellow-400">Sharp trial:</span> FREE 3-day trial (limited time). After trial: $40 first full month, then $79/mo ongoing.
+            <span className="text-yellow-400">Sharp trial:</span> FREE 3-day trial (limited time). After trial: $30 first full month, then $24.99/mo ongoing.
           </p>
           <p>
             <span className="text-yellow-400">Annual promo:</span> First year at the promo rate ($175 for Pro, $500 for Sharp). Renews at regular annual rate ($348 for Pro, $948 for Sharp) after year 1. Cancel anytime before renewal.

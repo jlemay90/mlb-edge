@@ -157,14 +157,14 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <Button size="lg" onClick={handleGetStarted} className="gap-2 text-base px-8">
                 <Zap className="h-5 w-5" />
-                Start 7-Day Trial — $5
+                Start Pro — $9.99
               </Button>
               <Button size="lg" variant="outline" onClick={() => setLocation("/pricing")} className="gap-2 text-base">
                 View Pricing
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Pro: 7-day trial for $5, then $10 first month, then $29/mo. Sharp: 3-day free trial, then $40 first month. Cancel anytime.
+              Pro: $9.99 first month, then $29/mo. Sharp: 3-day free trial, then $30 first month, then $24.99/mo. Cancel anytime.
             </p>
           </div>
         </div>
@@ -266,12 +266,12 @@ export default function LandingPage() {
           {[
             {
               name: "Pro",
-              price: "$5",
-              priceSub: "7-day trial",
-              promoNote: "Then $10 first month — $29/mo after",
+              price: "$9.99",
+              priceSub: "first month",
+              promoNote: "Then $29/mo after — cancel anytime",
               annualPromo: "or $175/yr (save $173 first year)",
               features: ["All picks (ML/RL/O-U)", "Player props", "Line movement", "Full game analysis"],
-              cta: "Start Pro Trial — $5",
+              cta: "Start Pro — $9.99",
               highlight: true,
               badge: "Most Popular",
             },
@@ -279,7 +279,7 @@ export default function LandingPage() {
               name: "Sharp",
               price: "FREE",
               priceSub: "3-day trial",
-              promoNote: "Then $40 first month — $79/mo after",
+              promoNote: "Then $30 first month — $24.99/mo after",
               annualPromo: "or $500/yr (save $448 first year)",
               features: ["Everything in Pro", "Parlay builder", "Moonshot HR props", "Steam alerts"],
               cta: "Start Sharp Trial — Free",
@@ -340,7 +340,7 @@ export default function LandingPage() {
           Ready to Find Your Edge?
         </h2>
         <p className="text-muted-foreground max-w-lg mx-auto">
-          Join MLB Edge today. Try Pro for $5 or Sharp free for 3 days. Our model is live for the
+          Join MLB Edge today. Start Pro for $9.99 or try Sharp free for 3 days. Our model is live for the
           2026 season — don't bet blind.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
