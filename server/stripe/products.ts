@@ -3,7 +3,7 @@
 // Products: prod_Ue6sfnk59m7R8N (Pro), prod_Ue6sAEo82YWmBo (Sharp)
 //
 // Pricing model:
-//   Pro:   $5 for 7-day trial → $10 first month → $29/mo ongoing
+//   Pro:   $9.99 first month → $29/mo ongoing
 //   Sharp: 3-day FREE trial   → $40 first month → $79/mo ongoing  (Limited time)
 //   Annual promos remain unchanged
 
@@ -49,10 +49,10 @@ export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
     tier: "pro",
     monthlyPriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || "price_1TermVANxPVrfK4rVtxXOcVH",
     annualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || "price_1TermWANxPVrfK4r4ePKEkok",
-    introMonthlyPriceId: process.env.STRIPE_PRO_INTRO_PRICE_ID || "price_1TermWANxPVrfK4r4ePKEkok",
-    trialDays: 7,
-    trialPrice: 500,            // $5 for 7-day trial
-    introMonthlyPrice: 1000,    // $10 first full month
+    introMonthlyPriceId: process.env.STRIPE_PRO_INTRO_PRICE_ID || "price_1TesF6ANxPVrfK4rjxvcl722",
+    trialDays: 0,
+    trialPrice: 0,
+    introMonthlyPrice: 999,     // $9.99 first month
     monthlyPrice: 2900,         // $29/mo ongoing
     monthlyRegPrice: 2900,
     annualPrice: 17500,         // $175/yr promo

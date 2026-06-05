@@ -105,11 +105,25 @@ export const stripeRouter = router({
             tier: input.tier,
           },
         };
-        // For paid trial ($5 Pro): collect payment method upfront
-        // Stripe subscription mode with trial_period_days handles this correctly —
-        // the card is charged $0 at signup, then the subscription price kicks in after trial.
-        // We handle the $5 trial fee via the price itself (price has unit_amount=500).
-        // No invoice_creation needed — subscriptions auto-generate invoices.
+        // For paid trials ($5 Pro): add a one-time line item for the trial fee.
+        // The subscription itself is free during the trial; the $5 is charged immediately
+        // as a separate add_invoice_items entry on the first invoice.
+        if (trialPrice > 0) {
+          sessionParams.line_items = [
+            { ...priceData, quantity: 1 },
+            {
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: `MLB Edge ${tierConfig.name} — 7-Day Trial Fee`,
+                  description: "One-time fee for 7-day trial access. Full billing begins after trial.",
+                },
+                unit_amount: trialPrice,
+              },
+              quantity: 1,
+            },
+          ];
+        }
       } else if (!isAnnual) {
         sessionParams.subscription_data = {
           metadata: {
