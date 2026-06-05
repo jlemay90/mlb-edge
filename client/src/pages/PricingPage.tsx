@@ -342,7 +342,7 @@ export default function PricingPage() {
 
         <div className="text-center text-xs text-muted-foreground max-w-2xl mx-auto pb-4">
           Past performance is not indicative of future results. Sports betting involves risk.
-          Cancel anytime — no contracts. Test card: 4242 4242 4242 4242.
+          Cancel anytime — no contracts.
         </div>
       </div>
     </AppLayout>
