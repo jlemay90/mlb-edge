@@ -47,9 +47,9 @@ export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
   pro: {
     name: "Pro",
     tier: "pro",
-    monthlyPriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || "price_1TeofDANxPVrfK4rTugeM1Hg",
-    annualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || "price_1TeofGANxPVrfK4rvWsKf87C",
-    introMonthlyPriceId: process.env.STRIPE_PRO_INTRO_PRICE_ID || "price_1Tep0yANxPVrfK4rb2bYIAXl",
+    monthlyPriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || "price_1TermVANxPVrfK4rVtxXOcVH",
+    annualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || "price_1TermWANxPVrfK4r4ePKEkok",
+    introMonthlyPriceId: process.env.STRIPE_PRO_INTRO_PRICE_ID || "price_1TermWANxPVrfK4r4ePKEkok",
     trialDays: 7,
     trialPrice: 500,            // $5 for 7-day trial
     introMonthlyPrice: 1000,    // $10 first full month
@@ -74,9 +74,9 @@ export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
   sharp: {
     name: "Sharp",
     tier: "sharp",
-    monthlyPriceId: process.env.STRIPE_SHARP_MONTHLY_PRICE_ID || "price_1TeofIANxPVrfK4rtQGDYTk0",
-    annualPriceId: process.env.STRIPE_SHARP_ANNUAL_PRICE_ID || "price_1TeofLANxPVrfK4rGJJvzzQ4",
-    introMonthlyPriceId: process.env.STRIPE_SHARP_INTRO_PRICE_ID || "price_1Tep10ANxPVrfK4rs0e8Ewhi",
+    monthlyPriceId: process.env.STRIPE_SHARP_MONTHLY_PRICE_ID || "price_1TermXANxPVrfK4rX2pboi1V",
+    annualPriceId: process.env.STRIPE_SHARP_ANNUAL_PRICE_ID || "price_1TermXANxPVrfK4rGW0YyKmC",
+    introMonthlyPriceId: process.env.STRIPE_SHARP_INTRO_PRICE_ID || "price_1TermXANxPVrfK4rGW0YyKmC",
     trialDays: 3,
     trialPrice: 0,              // FREE 3-day trial
     introMonthlyPrice: 4000,    // $40 first full month
