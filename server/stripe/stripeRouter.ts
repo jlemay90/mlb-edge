@@ -167,4 +167,45 @@ export const stripeRouter = router({
       annualPriceId: undefined,
     }));
   }),
+
+  // One-time tip jar payment
+  createTipCheckout: protectedProcedure
+    .input(
+      z.object({
+        amount: z.number().int().min(100).max(100000), // cents, $1–$1000
+        origin: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const stripe = getStripe();
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        allow_promotion_codes: false,
+        customer_email: ctx.user.email || undefined,
+        client_reference_id: ctx.user.id.toString(),
+        metadata: {
+          user_id: ctx.user.id.toString(),
+          customer_email: ctx.user.email || "",
+          customer_name: ctx.user.name || "",
+          type: "tip",
+          amount_cents: input.amount.toString(),
+        },
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: "MLB Edge Tip",
+                description: "Support the MLB Edge model — thank you! 🙏",
+              },
+              unit_amount: input.amount,
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: `${input.origin}/billing?tip=success`,
+        cancel_url: `${input.origin}/billing`,
+      });
+      return { url: session.url };
+    }),
 });

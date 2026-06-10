@@ -111,8 +111,8 @@
 - [x] New feature addition validated: mlb.healthCheck procedure added and confirmed working end-to-end
 
 ## Pinned — Next Session
-- [ ] Add "Contact Support to Cancel" button on billing page (friction before self-serve cancel)
-- [ ] Add Tip Jar feature (one-time payment option for users who want to support the platform)
+- [x] Add "Contact Support to Cancel" button on billing page (friction before self-serve cancel)
+- [x] Add Tip Jar feature (one-time payment option for users who want to support the platform) — UI added, Stripe wiring coming next session
 
 ## Parlays of the Day (Sharp Feature)
 - [x] DB schema: parlayCards table (id, date, type, legs JSON, combinedOdds, reasoning, result, createdAt)

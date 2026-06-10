@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Crown, Zap, TrendingUp, ExternalLink, CheckCircle, AlertCircle } from "lucide-react";
+import { Crown, Zap, TrendingUp, ExternalLink, CheckCircle, AlertCircle, HeartHandshake, Mail } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 
@@ -38,7 +38,10 @@ export default function BillingPage() {
     if (params.get("success") === "1") {
       const tier = params.get("tier");
       toast.success(`🎉 Welcome to MLB Edge ${tier ? TIER_LABELS[tier as keyof typeof TIER_LABELS] || tier : ""}! Your subscription is active.`);
-      // Clean up URL
+      window.history.replaceState({}, "", "/billing");
+    }
+    if (params.get("tip") === "success") {
+      toast.success("🙏 Thank you for the tip! You're helping keep the model sharp.");
       window.history.replaceState({}, "", "/billing");
     }
   }, []);
@@ -47,6 +50,18 @@ export default function BillingPage() {
     undefined,
     { enabled: !!user }
   );
+
+  const createTip = trpc.stripe.createTipCheckout.useMutation({
+    onSuccess: (data) => {
+      if (data.url) {
+        window.open(data.url, "_blank");
+        toast.success("Redirecting to checkout — thank you for the support! 🙏");
+      }
+    },
+    onError: (err) => {
+      toast.error(`Tip checkout error: ${err.message}`);
+    },
+  });
 
   const createPortal = trpc.stripe.createPortalSession.useMutation({
     onSuccess: (data) => {
@@ -241,8 +256,85 @@ export default function BillingPage() {
           </CardContent>
         </Card>
 
+        {/* Tip Jar */}
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <HeartHandshake className="h-4 w-4 text-pink-400" />
+              Support MLB Edge
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Love the picks? A tip helps keep the model sharp — funding better data sources, faster updates, and new features.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {[{label: "$5 Tip", amount: 500}, {label: "$10 Tip", amount: 1000}, {label: "$25 Tip", amount: 2500}].map(({ label, amount }) => (
+                <Button
+                  key={amount}
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 border-pink-500/30 text-pink-400 hover:bg-pink-500/10"
+                  disabled={createTip.isPending}
+                  onClick={() => {
+                    if (!user) {
+                      toast.error("Sign in to send a tip");
+                      return;
+                    }
+                    createTip.mutate({ amount, origin: window.location.origin });
+                  }}
+                >
+                  <HeartHandshake className="h-3 w-3" />
+                  {createTip.isPending ? "..." : label}
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Cancel / Support */}
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-base">Need Help or Want to Cancel?</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Before you cancel, reach out — we may be able to help with a pause, discount, or answer any questions about your subscription.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  window.open("mailto:support@intelligentbettingmlbedgepicks.com?subject=MLB Edge Support&body=Hi, I need help with my subscription.", "_blank");
+                  toast.info("Opening your email client...");
+                }}
+              >
+                <Mail className="h-4 w-4" />
+                Contact Support
+              </Button>
+              {isPaid && subscription?.customerId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                  onClick={() => createPortal.mutate({ origin: window.location.origin })}
+                  disabled={createPortal.isPending}
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  {createPortal.isPending ? "Opening..." : "Cancel Subscription"}
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Cancel anytime — no contracts, no questions asked. Cancellation takes effect at the end of your billing period.
+            </p>
+          </CardContent>
+        </Card>
+
         <p className="text-xs text-muted-foreground text-center">
-          Questions? Contact support. Cancel anytime — no contracts.
+          MLB Edge — Professional-grade betting intelligence. Gamble responsibly.
         </p>
       </div>
     </AppLayout>
