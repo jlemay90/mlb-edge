@@ -174,3 +174,15 @@
 - [x] Add "Grade Yesterday's Results" button to History tab
 - [x] Update empty history message to explain pending state clearly
 - [x] 36/36 tests passing, TypeScript clean after all debrief changes
+
+## Growth Funnel — Public Free Pick + Trust Building
+- [x] Public tRPC procedure: getFreePick (today's single best A/B-tier pick, no auth required)
+- [x] Public tRPC procedure: getPublicRecord (last 14-day win/loss record, no auth required)
+- [x] /free-pick page — fully public, no login, shareable URL with today's top pick + reasoning
+- [x] /free-pick shows last 14-day record strip with result dots for trust
+- [x] Landing page: live record widget (real W-L numbers from DB)
+- [x] Landing page: free pick preview card in hero (2-column layout)
+- [x] Landing page: hero CTA changed to 'See Today's Free Pick' as primary action
+- [x] Landing page: 'Free Pick' added to footer nav
+- [x] No changes to Stripe pricing, subscription tiers, or paywall logic
+- [x] 36/36 tests passing, TypeScript clean

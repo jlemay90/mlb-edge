@@ -2,11 +2,17 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Zap, TrendingUp, BarChart3, Activity, Shield, Target,
-  ChevronRight, Check, Star, Users, MoveHorizontal, Building2
+  ChevronRight, Check, Star, Building2, Trophy,
+  CheckCircle2, XCircle, Clock, ArrowRight,
 } from "lucide-react";
 import { getLoginUrl } from "@/const";
+import { trpc } from "@/lib/trpc";
+import { cn } from "@/lib/utils";
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StatCard({ value, label, sub }: { value: string; label: string; sub: string }) {
   return (
@@ -27,7 +33,7 @@ function FeatureCard({ icon: Icon, title, description, color }: {
   return (
     <Card className="bg-card/50 border-border hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/5">
       <CardContent className="p-5 space-y-3">
-        <div className={`inline-flex p-2 rounded-lg bg-muted/40`}>
+        <div className="inline-flex p-2 rounded-lg bg-muted/40">
           <Icon className={`h-5 w-5 ${color}`} />
         </div>
         <div>
@@ -37,6 +43,16 @@ function FeatureCard({ icon: Icon, title, description, color }: {
       </CardContent>
     </Card>
   );
+}
+
+function ResultDot({ result }: { result: string }) {
+  if (result === "win") return <CheckCircle2 className="w-4 h-4 text-green-400" />;
+  if (result === "loss") return <XCircle className="w-4 h-4 text-red-400" />;
+  return <Clock className="w-4 h-4 text-muted-foreground" />;
+}
+
+function formatOdds(odds: number): string {
+  return odds > 0 ? `+${odds}` : `${odds}`;
 }
 
 const FEATURES = [
@@ -96,8 +112,25 @@ const TESTIMONIALS = [
   },
 ];
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function LandingPage() {
   const [, setLocation] = useLocation();
+
+  const pickQuery = trpc.mlb.getFreePick.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const recordQuery = trpc.mlb.getPublicRecord.useQuery(
+    { days: 14 },
+    { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 }
+  );
+
+  const pick = pickQuery.data;
+  const record = recordQuery.data;
+  const pickError = pickQuery.isError;
+  const recordError = recordQuery.isError;
 
   function handleGetStarted() {
     setLocation("/pricing");
@@ -136,36 +169,158 @@ export default function LandingPage() {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent pointer-events-none" />
         <div className="max-w-6xl mx-auto px-4 py-16 md:py-24">
-          <div className="max-w-3xl space-y-6">
-            <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            {/* Left: copy */}
+            <div className="space-y-6">
               <Badge className="bg-primary/20 text-primary border-primary/30 text-xs px-3 py-1">
                 🔥 Live for 2026 MLB Season
               </Badge>
+              <h1 className="text-4xl md:text-6xl font-extrabold text-foreground leading-tight">
+                Stop Guessing.
+                <br />
+                <span className="text-primary">Start Winning.</span>
+              </h1>
+              <p className="text-lg text-muted-foreground leading-relaxed">
+                MLB Edge is the professional-grade betting intelligence platform built for serious bettors.
+                Our ML model analyzes every game with{" "}
+                <span className="text-foreground font-semibold">25+ real data points</span> — live odds,
+                Statcast metrics, weather, umpire tendencies, and park factors.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <Button size="lg" onClick={() => setLocation("/free-pick")} className="gap-2 text-base px-8">
+                  <Zap className="h-5 w-5" />
+                  See Today's Free Pick
+                </Button>
+                <Button size="lg" variant="outline" onClick={handleGetStarted} className="gap-2 text-base">
+                  View Pricing <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Free pick daily — no account needed. Pro from $9.99. Sharp: 3-day free trial.
+              </p>
             </div>
-            <h1 className="text-4xl md:text-6xl font-extrabold text-foreground leading-tight">
-              Stop Guessing.
-              <br />
-              <span className="text-primary">Start Winning.</span>
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
-              MLB Edge is the professional-grade betting intelligence platform built for serious bettors.
-              Our ML model analyzes every game with{" "}
-              <span className="text-foreground font-semibold">25+ real data points</span> — live odds,
-              Statcast metrics, weather, umpire tendencies, and park factors — to find the highest-edge picks
-              before the lines move.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <Button size="lg" onClick={handleGetStarted} className="gap-2 text-base px-8">
-                <Zap className="h-5 w-5" />
-                Start Pro — $9.99
-              </Button>
-              <Button size="lg" variant="outline" onClick={() => setLocation("/pricing")} className="gap-2 text-base">
-                View Pricing
-              </Button>
+
+            {/* Right: live free pick preview card */}
+            <div className="space-y-3">
+              {/* Record strip */}
+              {recordQuery.isLoading ? (
+                <Skeleton className="h-12 w-full rounded-xl" />
+              ) : record && record.totalGraded > 0 ? (
+                <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card/60 flex-wrap">
+                  <Trophy className="w-4 h-4 text-yellow-400 shrink-0" />
+                  <span className="text-sm font-bold text-foreground">
+                    {record.wins}–{record.losses}
+                    {record.pushes > 0 ? `–${record.pushes}` : ""}
+                  </span>
+                  <span className="text-xs text-muted-foreground">last 14 days</span>
+                  {record.winPct !== null && (
+                    <Badge variant="outline" className="text-xs text-green-400 border-green-500/30 ml-auto">
+                      {record.winPct}% win rate
+                    </Badge>
+                  )}
+                  {record.recentResults.length > 0 && (
+                    <div className="flex items-center gap-1">
+                      {record.recentResults.map((r, i) => (
+                        <ResultDot key={i} result={r.result} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {/* Free pick teaser */}
+              {pickQuery.isLoading ? (
+                <Card className="border border-border bg-card/80">
+                  <CardContent className="p-5 space-y-3">
+                    <Skeleton className="h-4 w-32 rounded" />
+                    <Skeleton className="h-8 w-48 rounded" />
+                    <Skeleton className="h-4 w-full rounded" />
+                    <Skeleton className="h-4 w-3/4 rounded" />
+                  </CardContent>
+                </Card>
+              ) : pickError ? (
+                <Card className="border border-border bg-card/60">
+                  <CardContent className="p-5 text-center space-y-2">
+                    <p className="text-sm text-muted-foreground">Pick failed to load — </p>
+                    <button className="text-xs text-primary underline" onClick={() => pickQuery.refetch()}>retry</button>
+                  </CardContent>
+                </Card>
+              ) : pick ? (
+                <Card className="border border-primary/30 bg-card/80 shadow-lg shadow-primary/5">
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">
+                          Today's Free Pick · {pick.awayTeam} @ {pick.homeTeam}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            {pick.market === "moneyline" ? "Money Line" : pick.market === "runline" ? "Run Line" : "Total"}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={cn("text-xs", pick.confidenceTier === "A"
+                              ? "bg-green-500/20 text-green-400 border-green-500/30"
+                              : "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                            )}
+                          >
+                            {pick.confidenceTier}-Tier
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className={cn(
+                        "text-2xl font-black tabular-nums shrink-0",
+                        (pick.odds ?? 0) > 0 ? "text-green-400" : "text-foreground"
+                      )}>
+                        {formatOdds(pick.odds ?? 0)}
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                      <p className="text-xs text-primary/70 font-medium uppercase tracking-wider mb-1">Pick</p>
+                      <p className="text-base font-bold text-foreground">{pick.pickLabel || pick.pick}</p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="p-2 rounded-lg bg-muted/30">
+                        <p className="text-[10px] text-muted-foreground">Model</p>
+                        <p className="text-xs font-bold text-foreground">
+                          {pick.modelProbability ? `${(pick.modelProbability * 100).toFixed(0)}%` : "—"}
+                        </p>
+                      </div>
+                      <div className="p-2 rounded-lg bg-muted/30">
+                        <p className="text-[10px] text-muted-foreground">Book</p>
+                        <p className="text-xs font-bold text-foreground">
+                          {pick.impliedProbability ? `${(pick.impliedProbability * 100).toFixed(0)}%` : "—"}
+                        </p>
+                      </div>
+                      <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                        <p className="text-[10px] text-green-400/70">Edge</p>
+                        <p className="text-xs font-bold text-green-400">
+                          +{((pick.edgeScore ?? 0) * 100).toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      className="w-full gap-2"
+                      variant="outline"
+                      onClick={() => setLocation("/free-pick")}
+                    >
+                      See Full Reasoning <ArrowRight className="w-3.5 h-3.5" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border border-border bg-card/60">
+                  <CardContent className="p-5 text-center space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Today's free pick loads after 9 AM ET.
+                    </p>
+                    <Button variant="outline" size="sm" onClick={() => setLocation("/free-pick")}>
+                      Check Free Pick Page
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Pro: $9.99 first month, then $29/mo. Sharp: 3-day free trial, then $30 first month, then $24.99/mo. Cancel anytime.
-            </p>
           </div>
         </div>
       </section>
@@ -263,54 +418,48 @@ export default function LandingPage() {
             <p className="text-muted-foreground">Try it first. Upgrade when you're winning.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
-          {[
-            {
-              name: "Pro",
-              price: "$9.99",
-              priceSub: "first month",
-              promoNote: "Then $29/mo after — cancel anytime",
-              annualPromo: "or $175/yr (save $173 first year)",
-              features: ["All picks (ML/RL/O-U)", "Player props", "Line movement", "Full game analysis"],
-              cta: "Start Pro — $9.99",
-              highlight: true,
-              badge: "Most Popular",
-            },
-            {
-              name: "Sharp",
-              price: "FREE",
-              priceSub: "3-day trial",
-              promoNote: "Then $30 first month — $24.99/mo after",
-              annualPromo: "or $500/yr (save $448 first year)",
-              features: ["Everything in Pro", "Parlay builder", "Moonshot HR props", "Steam alerts"],
-              cta: "Start Sharp Trial — Free",
-              highlight: false,
-              badge: "⚡ Limited Time Only",
-            },
-          ].map((tier) => (
+            {[
+              {
+                name: "Pro",
+                price: "$9.99",
+                priceSub: "first month",
+                promoNote: "Then $29/mo after — cancel anytime",
+                annualPromo: "or $175/yr (save $173 first year)",
+                features: ["All picks (ML/RL/O-U)", "Player props", "Line movement", "Full game analysis"],
+                cta: "Start Pro — $9.99",
+                highlight: true,
+                badge: "Most Popular",
+              },
+              {
+                name: "Sharp",
+                price: "FREE",
+                priceSub: "3-day trial",
+                promoNote: "Then $30 first month — $24.99/mo after",
+                annualPromo: "or $500/yr (save $448 first year)",
+                features: ["Everything in Pro", "Parlay builder", "Moonshot HR props", "Steam alerts"],
+                cta: "Start Sharp Trial — Free",
+                highlight: false,
+                badge: "⚡ Limited Time Only",
+              },
+            ].map((tier) => (
               <Card
                 key={tier.name}
                 className={`${tier.highlight ? "border-primary ring-1 ring-primary" : "border-border"} bg-card`}
               >
                 <CardContent className="p-5 space-y-4">
-                  {(tier as any).badge && (
-                    <Badge className={`text-xs ${
-                      tier.highlight
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
-                    }`}>{(tier as any).badge}</Badge>
-                  )}
+                  <Badge className={`text-xs ${
+                    tier.highlight
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+                  }`}>{tier.badge}</Badge>
                   <div>
                     <div className="font-bold text-lg text-foreground">{tier.name}</div>
                     <div className="flex items-baseline gap-2 mt-1">
                       <span className="text-2xl font-extrabold text-foreground">{tier.price}</span>
-                      <span className="text-sm text-muted-foreground">{(tier as any).priceSub}</span>
+                      <span className="text-sm text-muted-foreground">{tier.priceSub}</span>
                     </div>
-                    {(tier as any).promoNote && (
-                      <p className="text-xs text-yellow-400/80 mt-1">{(tier as any).promoNote}</p>
-                    )}
-                    {(tier as any).annualPromo && (
-                      <p className="text-xs text-green-400/80 mt-0.5">{(tier as any).annualPromo}</p>
-                    )}
+                    <p className="text-xs text-yellow-400/80 mt-1">{tier.promoNote}</p>
+                    <p className="text-xs text-green-400/80 mt-0.5">{tier.annualPromo}</p>
                   </div>
                   <ul className="space-y-1.5">
                     {tier.features.map((f) => (
@@ -321,7 +470,7 @@ export default function LandingPage() {
                     ))}
                   </ul>
                   <Button
-                    className={`w-full text-sm ${tier.highlight ? "" : "variant-outline"}`}
+                    className="w-full text-sm"
                     variant={tier.highlight ? "default" : "outline"}
                     onClick={handleGetStarted}
                   >
@@ -340,16 +489,16 @@ export default function LandingPage() {
           Ready to Find Your Edge?
         </h2>
         <p className="text-muted-foreground max-w-lg mx-auto">
-          Join MLB Edge today. Start Pro for $9.99 or try Sharp free for 3 days. Our model is live for the
-          2026 season — don't bet blind.
+          Start with today's free pick — no account needed. When you're ready for all 5 daily parlays,
+          upgrade to Pro or Sharp.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Button size="lg" onClick={handleGetStarted} className="gap-2 text-base px-10">
+          <Button size="lg" onClick={() => setLocation("/free-pick")} className="gap-2 text-base px-8">
             <Zap className="h-5 w-5" />
-            Start Your Trial
+            See Today's Free Pick
           </Button>
-          <Button size="lg" variant="outline" onClick={handleLogin} className="gap-2 text-base">
-            Sign In
+          <Button size="lg" variant="outline" onClick={handleGetStarted} className="gap-2 text-base">
+            View All Plans
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -370,6 +519,9 @@ export default function LandingPage() {
               <span className="text-xs text-muted-foreground">© 2026</span>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+              <button onClick={() => setLocation("/free-pick")} className="hover:text-foreground transition-colors">
+                Free Pick
+              </button>
               <button onClick={() => setLocation("/pricing")} className="hover:text-foreground transition-colors">
                 Pricing
               </button>

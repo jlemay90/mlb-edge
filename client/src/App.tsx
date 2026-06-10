@@ -15,6 +15,7 @@ import LineMovementPage from "./pages/LineMovementPage";
 import PricingPage from "./pages/PricingPage";
 import BillingPage from "./pages/BillingPage";
 import LandingPage from "./pages/LandingPage";
+import FreePickPage from "./pages/FreePickPage";
 import LegalPage from "./pages/LegalPage";
 import ParlaysPage from "./pages/ParlaysPage";
 import { AgeGate } from "./components/AgeGate";
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/billing" component={BillingPage} />
       <Route path="/parlays" component={ParlaysPage} />
       <Route path="/landing" component={LandingPage} />
+      <Route path="/free-pick" component={FreePickPage} />
       <Route path="/legal" component={LegalPage} />
       <Route path="/terms" component={LegalPage} />
       <Route path="/privacy" component={LegalPage} />

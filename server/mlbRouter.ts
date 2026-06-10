@@ -11,6 +11,7 @@ import {
   pitcherStats,
   backtestResults,
   oddsSnapshots,
+  parlayCards,
 } from "../drizzle/schema";
 import { eq, desc, and, inArray, asc, gte, sql } from "drizzle-orm";
 import { cached, TTL } from "./services/cache";
@@ -1046,6 +1047,101 @@ export const mlbRouter = router({
       message: "MLB Edge data pipeline is live",
     };
   }),
+
+  /**
+   * Public daily free pick — no auth required.
+   * Returns the single highest-edge A/B-tier pick for today.
+   * Used on the /free-pick page and landing page preview.
+   */
+  getFreePick: publicProcedure.query(async () => {
+    return cached("freePick:today", TTL.picks, async () => {
+      const date = new Date().toISOString().split("T")[0];
+      const [schedule, oddsData] = await Promise.all([
+        fetchTodaysSchedule(date),
+        fetchMLBOdds("h2h,spreads,totals").catch(() => []),
+      ]);
+      if (!schedule.length) return null;
+      const { teamStatsMap, pitcherStatsMap, weatherMap } = await fetchAllGameData(schedule);
+      let bestPick: any = null;
+      let bestEdge = -Infinity;
+      for (const game of schedule) {
+        const homeTeamId = game.teams?.home?.team?.id;
+        const awayTeamId = game.teams?.away?.team?.id;
+        const homeTeamName = game.teams?.home?.team?.name || "";
+        const awayTeamName = game.teams?.away?.team?.name || "";
+        const homeAbbr = TEAM_ABBR_MAP[homeTeamId] || "???";
+        const awayAbbr = TEAM_ABBR_MAP[awayTeamId] || "???";
+        const homePitcher = game.teams?.home?.probablePitcher?.fullName;
+        const awayPitcher = game.teams?.away?.probablePitcher?.fullName;
+        const oddsGame = matchOddsGame(game, oddsData);
+        const features = buildGameFeaturesSync(
+          game, oddsGame,
+          teamStatsMap.get(homeTeamId),
+          teamStatsMap.get(awayTeamId),
+          pitcherStatsMap.get(game.teams?.home?.probablePitcher?.id),
+          pitcherStatsMap.get(game.teams?.away?.probablePitcher?.id),
+          weatherMap.get(game.gamePk)
+        );
+        const analysis = analyzeGame(features);
+        const topPick = analysis.topPick;
+        if (!topPick) continue;
+        if (topPick.confidenceTier !== "A" && topPick.confidenceTier !== "B") continue;
+        if ((topPick.edgeScore ?? 0) > bestEdge) {
+          bestEdge = topPick.edgeScore ?? 0;
+          const normalized = normalizePick(topPick, game.gamePk, homeTeamName, awayTeamName, homeAbbr, awayAbbr, game.gameDate, homePitcher, awayPitcher);
+          if (normalized) {
+            bestPick = {
+              ...normalized,
+              homeTeam: homeTeamName,
+              awayTeam: awayTeamName,
+              homeAbbr,
+              awayAbbr,
+              gameDate: game.gameDate,
+              homePitcher: homePitcher || null,
+              awayPitcher: awayPitcher || null,
+              date,
+            };
+          }
+        }
+      }
+      return bestPick;
+    });
+  }),
+
+  /**
+   * Public win/loss record — no auth required.
+   * Returns last N days of parlay card results for social proof.
+   */
+  getPublicRecord: publicProcedure
+    .input(z.object({ days: z.number().min(1).max(30).optional() }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { wins: 0, losses: 0, pushes: 0, winPct: null, totalGraded: 0, recentResults: [] };
+      const days = input?.days ?? 14;
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      const cutoffStr = cutoff.toISOString().split("T")[0];
+      const allCards = await db
+        .select()
+        .from(parlayCards)
+        .orderBy(desc(parlayCards.date));
+      const filtered = allCards.filter((c) => {
+        const d = typeof c.date === "string" ? c.date : (c.date as Date).toISOString().split("T")[0];
+        return d >= cutoffStr && (c.result === "win" || c.result === "loss" || c.result === "push");
+      });
+      const wins = filtered.filter((c) => c.result === "win").length;
+      const losses = filtered.filter((c) => c.result === "loss").length;
+      const pushes = filtered.filter((c) => c.result === "push").length;
+      const totalGraded = wins + losses + pushes;
+      const winPct = totalGraded > 0 ? Math.round((wins / totalGraded) * 100) : null;
+      const recentResults = filtered.slice(0, 5).map((c) => ({
+        date: typeof c.date === "string" ? c.date : (c.date as Date).toISOString().split("T")[0],
+        type: c.type as string,
+        result: c.result as string,
+        combinedOdds: c.combinedOdds,
+      }));
+      return { wins, losses, pushes, winPct, totalGraded, recentResults };
+    }),
 
   // Seed mock backtest data
   seedBacktestData: publicProcedure.mutation(async () => {
