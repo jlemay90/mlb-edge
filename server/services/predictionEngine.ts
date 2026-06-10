@@ -113,7 +113,9 @@ export interface GameFeatures {
   // Odds
   homeMoneyLine?: number;
   awayMoneyLine?: number;
-  runLine?: number;
+  runLine?: number;          // home team spread point (e.g. -1.5)
+  homeRunLineOdds?: number;  // actual DK/FD spread price for home team
+  awayRunLineOdds?: number;  // actual DK/FD spread price for away team
   total?: number;
   overPrice?: number;
   underPrice?: number;
@@ -360,9 +362,9 @@ export function predictRunLine(features: GameFeatures): PredictionResult | null 
   const homeCoverProb = 1 / (1 + Math.exp(-(runDiff - 1.5) * 0.45));
   const awayCoverProb = 1 - homeCoverProb;
 
-  // Get implied probabilities from spread odds
-  const homeSpreadOdds = features.homeMoneyLine ? features.homeMoneyLine - 50 : -110;
-  const awaySpreadOdds = features.awayMoneyLine ? features.awayMoneyLine + 50 : -110;
+  // Use real DK/FD spread odds if available, otherwise fall back to ML-derived estimate
+  const homeSpreadOdds = features.homeRunLineOdds ?? (features.homeMoneyLine ? features.homeMoneyLine - 50 : -110);
+  const awaySpreadOdds = features.awayRunLineOdds ?? (features.awayMoneyLine ? features.awayMoneyLine + 50 : -110);
 
   const homeSpreadImplied = americanToImplied(homeSpreadOdds);
   const awaySpreadImplied = americanToImplied(awaySpreadOdds);
@@ -380,9 +382,14 @@ export function predictRunLine(features: GameFeatures): PredictionResult | null 
   const impliedProb = isHomePick ? trueHomeSpread : trueAwaySpread;
   const edgeScore = modelProb - impliedProb;
   const recommendedOdds = isHomePick ? homeSpreadOdds : awaySpreadOdds;
+
+  // Determine correct spread label from actual API data
+  // runLine is the home team's spread point from the API (e.g. -1.5 for favorites, +1.5 for underdogs)
+  const homeSpreadPoint = features.runLine ?? -1.5;
+  const awaySpreadPoint = -homeSpreadPoint; // always the opposite
   const pickLabel = isHomePick
-    ? `${features.homeTeamName} -1.5 (${recommendedOdds > 0 ? "+" : ""}${recommendedOdds})`
-    : `${features.awayTeamName} +1.5 (${recommendedOdds > 0 ? "+" : ""}${recommendedOdds})`;
+    ? `${features.homeTeamName} ${homeSpreadPoint > 0 ? "+" : ""}${homeSpreadPoint} (${recommendedOdds > 0 ? "+" : ""}${recommendedOdds})`
+    : `${features.awayTeamName} ${awaySpreadPoint > 0 ? "+" : ""}${awaySpreadPoint} (${recommendedOdds > 0 ? "+" : ""}${recommendedOdds})`;
 
   return {
     market: "runline",

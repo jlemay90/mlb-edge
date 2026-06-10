@@ -114,65 +114,78 @@ export const parlayRouter = router({
       }
 
       // Fetch live game data via the cached mlbRouter helpers
-      const { fetchMLBPlayerProps } = await import("./services/mlbData");
-      // Re-use the same cache key as mlbRouter.getTodaysGames to avoid redundant API calls
-      const enrichedGames = await cached(`todaysGames:${today}`, TTL.picks, async () => {
-        // Fallback: fetch fresh if cache is cold
-        const { fetchTodaysSchedule: fts, fetchMLBOdds: fmo, STADIUM_DATA: SD, fetchGameWeather: fgw, getUmpireTendency: gut, TEAM_ABBR_MAP: TAM } = await import("./services/mlbData");
+      const { fetchMLBPlayerProps, fetchMLBEvents } = await import("./services/mlbData");
+      // Use the same cache key as mlbRouter.getTodaysGames — avoids redundant API calls
+      // and ensures we use the correctly enriched game objects with proper field names
+      const enrichedGames: any[] = await cached(`todaysGames:${today}`, TTL.picks, async () => {
+        // Cache is cold — fetch fresh using the same logic as mlbRouter
+        const { fetchTodaysSchedule: fts, fetchMLBOdds: fmo, fetchGameWeather: fgw } = await import("./services/mlbData");
         const { analyzeGame: ag } = await import("./services/predictionEngine");
+        // buildGameFeaturesSync lives in mlbRouter (not mlbData) — import it directly
+        const { buildGameFeaturesSync: bgfs } = await import("./mlbRouter");
         const sched = await fts(today).catch(() => []);
         const oddsArr = await fmo("h2h,spreads,totals").catch(() => []);
         const results: any[] = [];
         for (const game of sched) {
           const homeTeamId = game.teams?.home?.team?.id;
-          const stadiumInfo = (SD as any)[homeTeamId];
           let weather: any = null;
-          if (stadiumInfo) {
-            weather = await fgw(game.gamePk, stadiumInfo.lat, stadiumInfo.lon, stadiumInfo.altFt, process.env.OPENWEATHER_API_KEY).catch(() => null);
-          }
+          // buildGameFeaturesSync uses STADIUM_DATA internally from mlbRouter
           const oddsGame = oddsArr.find((o: any) => {
-            const homeLast = (game.teams?.home?.team?.name || "").split(" ").pop() || "";
             if (o.home_team === game.teams?.home?.team?.name) return true;
+            const homeLast = (game.teams?.home?.team?.name || "").split(" ").pop() || "";
             const teams = o.bookmakers?.[0]?.markets?.[0]?.outcomes?.map((x: any) => x.name) || [];
             return teams.some((t: string) => t.includes(homeLast));
           });
-          // Build minimal features for analyzeGame
-          const features: any = {
-            homeTeamId: homeTeamId || 0,
-            awayTeamId: game.teams?.away?.team?.id || 0,
-            homeTeamName: game.teams?.home?.team?.name || "",
-            awayTeamName: game.teams?.away?.team?.name || "",
-            homeML: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "h2h")?.outcomes?.find((o: any) => o.name === game.teams?.home?.team?.name)?.price ?? -110,
-            awayML: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "h2h")?.outcomes?.find((o: any) => o.name === game.teams?.away?.team?.name)?.price ?? -110,
-            homeSpread: -1.5,
-            awaySpread: 1.5,
-            homeSpreadOdds: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "spreads")?.outcomes?.find((o: any) => o.name === game.teams?.home?.team?.name)?.price ?? -110,
-            awaySpreadOdds: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "spreads")?.outcomes?.find((o: any) => o.name === game.teams?.away?.team?.name)?.price ?? -110,
-            total: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "totals")?.outcomes?.[0]?.point ?? 8.5,
-            overOdds: -110, underOdds: -110,
-            weather: weather ? { temp: weather.temp, windSpeed: weather.windSpeed, windDir: weather.windDir, humidity: weather.humidity } : undefined,
-            parkFactor: stadiumInfo ? { runs: stadiumInfo.parkFactorRuns, hr: stadiumInfo.parkFactorHR } : undefined,
-            umpire: gut(game.officials?.find((o: any) => o.officialType === "Home Plate")?.official?.fullName || "default"),
-          };
+          // Fetch weather for this game
+          const { STADIUM_DATA: SD } = await import("./services/mlbData");
+          const stadiumInfo = (SD as any)[homeTeamId];
+          if (stadiumInfo) {
+            weather = await fgw(game.gamePk, stadiumInfo.lat, stadiumInfo.lon, stadiumInfo.altFt, process.env.OPENWEATHER_API_KEY).catch(() => null);
+          }
+          // Use canonical buildGameFeaturesSync — correct field names for analyzeGame
+          const features = bgfs(game, oddsGame, null, null, null, null, weather);
           const analysis = ag(features);
           results.push({
             gamePk: game.gamePk,
             gameDate: today,
             homeTeam: { id: homeTeamId, name: game.teams?.home?.team?.name },
             awayTeam: { id: game.teams?.away?.team?.id, name: game.teams?.away?.team?.name },
-            homePitcher: game.teams?.home?.probablePitcher ? { name: game.teams.home.probablePitcher.fullName, era: 4.0, fip: 4.0 } : null,
-            awayPitcher: game.teams?.away?.probablePitcher ? { name: game.teams.away.probablePitcher.fullName, era: 4.0, fip: 4.0 } : null,
+            homePitcher: game.teams?.home?.probablePitcher ? { name: game.teams.home.probablePitcher.fullName, era: null, fip: null } : null,
+            awayPitcher: game.teams?.away?.probablePitcher ? { name: game.teams.away.probablePitcher.fullName, era: null, fip: null } : null,
             weather,
             parkFactor: stadiumInfo,
             predictions: analysis,
           });
         }
         return results;
-      });
+      }) || [];
 
       const enriched: any[] = enrichedGames || [];
-      const rawPropsResult = await fetchMLBPlayerProps("player_props").catch(() => []);
-      const rawProps: any[] = Array.isArray(rawPropsResult) ? rawPropsResult : [];
+
+      // Fetch real event IDs from the Odds API, then pull props for each game
+      let rawProps: any[] = [];
+      try {
+        const { fetchMLBEvents } = await import("./services/mlbData");
+        const events = await fetchMLBEvents().catch(() => []);
+        // For each enriched game, find the matching Odds API event ID
+        const propResults = await Promise.all(
+          enriched.slice(0, 10).map(async (game: any) => { // cap at 10 to save quota
+            const homeName = game.homeTeam?.name || "";
+            const awayName = game.awayTeam?.name || "";
+            const event = events.find((e: any) =>
+              e.home_team === homeName || e.away_team === awayName ||
+              e.home_team?.includes(homeName.split(" ").pop() || "") ||
+              e.away_team?.includes(awayName.split(" ").pop() || "")
+            );
+            if (!event?.id) return null;
+            const propsData = await fetchMLBPlayerProps(event.id).catch(() => null);
+            return propsData;
+          })
+        );
+        rawProps = propResults.filter(Boolean);
+      } catch (propErr) {
+        console.error("[parlayRouter] Props fetch failed:", (propErr as Error).message);
+      }
 
       if (enriched.length === 0) return { generated: false, reason: "no_games_today" };
 

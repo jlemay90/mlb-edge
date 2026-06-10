@@ -206,6 +206,7 @@ export async function fetchMLBOdds(markets = "h2h,spreads,totals"): Promise<any[
         apiKey,
         regions: "us",
         markets,
+        bookmakers: "draftkings,fanduel",
         oddsFormat: "american",
         dateFormat: "iso",
       },
@@ -229,6 +230,8 @@ export async function fetchMLBPlayerProps(eventId: string): Promise<any> {
         params: {
           apiKey,
           regions: "us",
+          // DK/FD don't post props via the API — use all available books for props
+          // (williamhill_us, betrivers are the primary sources for MLB player props)
           markets: [
             "batter_hits",
             "batter_home_runs",

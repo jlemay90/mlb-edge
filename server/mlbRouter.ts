@@ -85,7 +85,7 @@ function buildRationale(pick: any): string {
 
 // ─── Build GameFeatures from pre-fetched data ─────────────────────────────────
 
-function buildGameFeaturesSync(
+export function buildGameFeaturesSync(
   game: any,
   oddsGame: any,
   homeTeamStatsRow: any,
@@ -150,7 +150,7 @@ function buildGameFeaturesSync(
         (o: any) => o.name === awayTeamName || o.name?.includes(awayTeamName?.split(" ").pop())
       );
       if (homeSpread) {
-        runLine = homeSpread.point; // e.g. -1.5
+        runLine = homeSpread.point; // actual spread point from DK/FD, e.g. -1.5 or +1.5
         homeRunLineOdds = homeSpread.price;
       }
       if (awaySpread) {
@@ -235,6 +235,8 @@ function buildGameFeaturesSync(
     overPrice,
     underPrice,
     runLine,
+    homeRunLineOdds,
+    awayRunLineOdds,
   };
 }
 

@@ -128,3 +128,13 @@
 - [x] Frontend: Add /parlays route to App.tsx and nav sidebar
 - [x] DB migration: applied via webdev_execute_sql
 - [x] TypeScript: 0 errors, 16/16 tests passing
+
+## Odds API Upgrade (Phase 2)
+- [ ] Update ODDS_API_KEY secret to new key
+- [ ] Filter all odds calls to DraftKings + FanDuel only
+- [ ] Fix run line bug: favorites always -1.5, underdogs always +1.5
+- [ ] Implement 30-min polling for game odds (10 AM–midnight ET)
+- [ ] Implement 30-min polling for player props (10 AM–10 PM ET)
+- [ ] Store line movement snapshots in DB every 30 min
+- [ ] Fix HR props pipeline so HR Prop Parlay populates correctly
+- [ ] Force-regenerate today's parlays with fresh data

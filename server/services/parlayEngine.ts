@@ -161,8 +161,9 @@ function extractCandidateLegs(games: any[]): CandidateLeg[] {
     const awayTeam = game.awayTeam?.name ?? "Away";
     const gamePk = game.gamePk;
 
-    // Money line
-    if (moneyLine && moneyLine.edgeScore > 0.04 && moneyLine.odds) {
+    // Money line — prediction engine returns recommendedOdds (not odds)
+    const mlOdds = moneyLine?.recommendedOdds ?? moneyLine?.odds;
+    if (moneyLine && moneyLine.edgeScore > 0.04 && mlOdds) {
       const edge = moneyLine.edgeScore;
       const tierBonus = moneyLine.confidenceTier === "A" ? 0.15 : moneyLine.confidenceTier === "B" ? 0.08 : 0;
       legs.push({
@@ -170,7 +171,7 @@ function extractCandidateLegs(games: any[]): CandidateLeg[] {
         market: "moneyline",
         pick: moneyLine.pick,
         pickLabel: moneyLine.pickLabel,
-        odds: moneyLine.odds,
+        odds: mlOdds,
         edgeScore: edge,
         modelProbability: moneyLine.modelProbability,
         reasoning: buildLegReasoning(game, "moneyline", moneyLine.pick, moneyLine),
@@ -178,8 +179,9 @@ function extractCandidateLegs(games: any[]): CandidateLeg[] {
       });
     }
 
-    // Run line
-    if (runLine && runLine.edgeScore > 0.04 && runLine.odds) {
+    // Run line — prediction engine returns recommendedOdds (not odds)
+    const rlOdds = runLine?.recommendedOdds ?? runLine?.odds;
+    if (runLine && runLine.edgeScore > 0.04 && rlOdds) {
       const edge = runLine.edgeScore;
       const tierBonus = runLine.confidenceTier === "A" ? 0.12 : runLine.confidenceTier === "B" ? 0.06 : 0;
       legs.push({
@@ -187,7 +189,7 @@ function extractCandidateLegs(games: any[]): CandidateLeg[] {
         market: "runline",
         pick: runLine.pick,
         pickLabel: runLine.pickLabel,
-        odds: runLine.odds,
+        odds: rlOdds,
         edgeScore: edge,
         modelProbability: runLine.modelProbability,
         reasoning: buildLegReasoning(game, "runline", runLine.pick, runLine),
@@ -195,8 +197,9 @@ function extractCandidateLegs(games: any[]): CandidateLeg[] {
       });
     }
 
-    // Total
-    if (total && total.edgeScore > 0.05 && total.odds) {
+    // Total — prediction engine returns recommendedOdds (not odds)
+    const totOdds = total?.recommendedOdds ?? total?.odds;
+    if (total && total.edgeScore > 0.05 && totOdds) {
       const edge = total.edgeScore;
       const tierBonus = total.confidenceTier === "A" ? 0.12 : total.confidenceTier === "B" ? 0.06 : 0;
       legs.push({
@@ -204,7 +207,7 @@ function extractCandidateLegs(games: any[]): CandidateLeg[] {
         market: "total",
         pick: total.pick,
         pickLabel: total.pickLabel,
-        odds: total.odds,
+        odds: totOdds,
         edgeScore: edge,
         modelProbability: total.modelProbability,
         reasoning: buildLegReasoning(game, "total", total.pick, total),

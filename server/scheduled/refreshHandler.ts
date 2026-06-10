@@ -13,7 +13,7 @@ import { sdk } from "../_core/sdk";
 import { getDb } from "../db";
 import { oddsSnapshots } from "../../drizzle/schema";
 import { invalidate } from "../services/cache";
-import { fetchTodaysSchedule, fetchMLBOdds, fetchMLBPlayerProps, STADIUM_DATA, getUmpireTendency, fetchGameWeather } from "../services/mlbData";
+import { fetchTodaysSchedule, fetchMLBOdds, fetchMLBPlayerProps, fetchMLBEvents, STADIUM_DATA, getUmpireTendency, fetchGameWeather } from "../services/mlbData";
 import { analyzeGame } from "../services/predictionEngine";
 import { generateDailyParlays } from "../services/parlayEngine";
 import { parlayCards, parlayLegs } from "../../drizzle/schema";
@@ -129,7 +129,22 @@ export async function scheduledRefreshHandler(req: Request, res: Response) {
       if (existing.length === 0) {
         try {
           // Enrich games with predictions
-          const rawProps = await fetchMLBPlayerProps("player_props").catch(() => []);
+          // Fetch real event IDs and pull props per game (cap at 10 to save quota)
+          const events = await fetchMLBEvents().catch(() => []);
+          const propResults = await Promise.all(
+            schedule.slice(0, 10).map(async (g: any) => {
+              const homeName = g.teams?.home?.team?.name || "";
+              const awayName = g.teams?.away?.team?.name || "";
+              const event = events.find((e: any) =>
+                e.home_team === homeName || e.away_team === awayName ||
+                e.home_team?.includes(homeName.split(" ").pop() || "") ||
+                e.away_team?.includes(awayName.split(" ").pop() || "")
+              );
+              if (!event?.id) return null;
+              return fetchMLBPlayerProps(event.id).catch(() => null);
+            })
+          );
+          const rawProps = propResults.filter(Boolean);
           const enriched: any[] = [];
           for (const game of schedule) {
             const homeTeamId = game.teams?.home?.team?.id;
