@@ -152,6 +152,11 @@ export function buildGameFeaturesSync(
     }
 
     // Real run line odds from spreads market
+    // runLine is ALWAYS the home team's spread point from the API.
+    // In MLB, the favorite is always -1.5 and the underdog is always +1.5.
+    // When the home team is the underdog (e.g. CHW at +4.5 vs ATL), homeSpread.point
+    // will be positive — we must still record it as-is so the prediction engine
+    // can correctly label who is favored.
     if (spreadsMarket) {
       const homeSpread = spreadsMarket.outcomes?.find(
         (o: any) => o.name === homeTeamName || o.name?.includes(homeTeamName?.split(" ").pop())
@@ -159,11 +164,17 @@ export function buildGameFeaturesSync(
       const awaySpread = spreadsMarket.outcomes?.find(
         (o: any) => o.name === awayTeamName || o.name?.includes(awayTeamName?.split(" ").pop())
       );
-      if (homeSpread) {
-        runLine = homeSpread.point; // actual spread point from DK/FD, e.g. -1.5 or +1.5
+      if (homeSpread && awaySpread) {
+        // Normalize: runLine is always the home team's actual spread point from the API.
+        // If home team is the underdog (positive point), runLine will be positive.
+        // The prediction engine uses this to determine who is favored.
+        runLine = homeSpread.point;
         homeRunLineOdds = homeSpread.price;
-      }
-      if (awaySpread) {
+        awayRunLineOdds = awaySpread.price;
+      } else if (homeSpread) {
+        runLine = homeSpread.point;
+        homeRunLineOdds = homeSpread.price;
+      } else if (awaySpread) {
         awayRunLineOdds = awaySpread.price;
       }
     }
@@ -352,11 +363,16 @@ function matchOddsGame(game: any, oddsData: any[]): any {
   const awayLast = awayTeamName.split(" ").pop() || "";
 
   return oddsData.find((og: any) => {
+    // Priority 1: exact full name match on home OR away
+    if (og.home_team === homeTeamName && og.away_team === awayTeamName) return true;
+    // Priority 2: exact full name match on either side (handles edge cases)
     if (og.home_team === homeTeamName || og.away_team === awayTeamName) return true;
+    // Priority 3: last-word fuzzy match — MUST match BOTH teams to avoid
+    // false positives like "White Sox" matching "Red Sox" games.
     const teams = og.bookmakers?.[0]?.markets?.[0]?.outcomes?.map((o: any) => o.name) || [];
-    return teams.some(
-      (t: string) => t.includes(homeLast) || homeLast.includes(t.split(" ").pop() || "")
-    );
+    const homeMatch = teams.some((t: string) => t.includes(homeLast) || t === homeTeamName);
+    const awayMatch = teams.some((t: string) => t.includes(awayLast) || t === awayTeamName);
+    return homeMatch && awayMatch;
   });
 }
 

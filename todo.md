@@ -152,3 +152,15 @@
 - [x] modelSignals field added to getTodaysGames return object
 - [x] Parlays regenerated with upgraded model (IDs 90006-90010)
 - [x] 36/36 tests passing, TypeScript clean
+
+## Odds Accuracy Fixes — No Guessing Policy
+- [x] Fix matchOddsGame: require BOTH home AND away team match to prevent Sox/Sox collision (CHW vs BOS false match)
+- [x] Fix spread point parsing — homeRunLine now correctly shows home team's actual spread point from API
+- [x] Fix spread odds parsing — use outcome.price directly, no formula-derived fallbacks
+- [x] Fix predictRunLine: require real homeRunLineOdds AND awayRunLineOdds from API (no fallback)
+- [x] Add run differential gate: only recommend run line if projected diff >= 1.8 runs
+- [x] Remove all formula fallbacks from predictRunLine (the ?? ML - 50 pattern)
+- [x] Regenerate today's parlays with clean real-only data (5 cards, all real DK/FD odds)
+- [x] Fix refreshHandler.ts: replace local matchOddsGame (Sox/Sox bug) with canonical both-team matcher
+- [x] Fix refreshHandler.ts: replace hardcoded feature building (?? -110, ?? 8.5) with buildGameFeaturesSync
+- [x] 36/36 tests passing, TypeScript clean after all fixes

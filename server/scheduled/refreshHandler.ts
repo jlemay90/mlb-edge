@@ -13,22 +13,27 @@ import { sdk } from "../_core/sdk";
 import { getDb } from "../db";
 import { oddsSnapshots } from "../../drizzle/schema";
 import { invalidate } from "../services/cache";
-import { fetchTodaysSchedule, fetchMLBOdds, fetchMLBPlayerProps, fetchMLBEvents, STADIUM_DATA, getUmpireTendency, fetchGameWeather } from "../services/mlbData";
+import { fetchTodaysSchedule, fetchMLBOdds, fetchMLBPlayerProps, fetchMLBEvents, STADIUM_DATA, getUmpireTendency, fetchGameWeather, fetchBullpenStatus, fetchConfirmedLineups, fetchPitcherRecentForm } from "../services/mlbData";
 import { analyzeGame } from "../services/predictionEngine";
 import { generateDailyParlays } from "../services/parlayEngine";
+import { buildGameFeaturesSync } from "../mlbRouter";
 import { parlayCards, parlayLegs } from "../../drizzle/schema";
 import { eq, inArray } from "drizzle-orm";
 
-// Match an Odds API game to an MLB schedule game by team name (mirrors
-// matchOddsGame in mlbRouter, kept local to avoid a router import cycle).
+// Match an Odds API game to an MLB schedule game by team name.
+// MUST match BOTH home AND away to prevent false positives (e.g. White Sox vs Red Sox).
 function matchOddsGame(og: any, homeName: string, awayName: string): boolean {
+  // Priority 1: exact full name match on both sides
+  if (og.home_team === homeName && og.away_team === awayName) return true;
+  // Priority 2: exact full name match on either side
   if (og.home_team === homeName || og.away_team === awayName) return true;
+  // Priority 3: last-word fuzzy match — MUST match BOTH teams
   const homeLast = homeName.split(" ").pop() || "";
-  const teams =
-    og.bookmakers?.[0]?.markets?.[0]?.outcomes?.map((o: any) => o.name) || [];
-  return teams.some(
-    (t: string) => t.includes(homeLast) || homeLast.includes(t.split(" ").pop() || "")
-  );
+  const awayLast = awayName.split(" ").pop() || "";
+  const teams = og.bookmakers?.[0]?.markets?.[0]?.outcomes?.map((o: any) => o.name) || [];
+  const homeMatch = teams.some((t: string) => t.includes(homeLast) || t === homeName);
+  const awayMatch = teams.some((t: string) => t.includes(awayLast) || t === awayName);
+  return homeMatch && awayMatch;
 }
 
 function todayStr(): string {
@@ -146,8 +151,40 @@ export async function scheduledRefreshHandler(req: Request, res: Response) {
           );
           const rawProps = propResults.filter(Boolean);
           const enriched: any[] = [];
+          // Fetch bullpen, lineup, and pitcher form data for all games (same as getTodaysGames)
+          const bullpenMap = new Map<number, any>();
+          const lineupMap = new Map<number, any>();
+          const recentFormMap = new Map<number, any>();
+          const teamIds = new Set<number>();
+          const pitcherIds = new Set<number>();
+          for (const g of schedule) {
+            const hId = g.teams?.home?.team?.id;
+            const aId = g.teams?.away?.team?.id;
+            const hPId = g.teams?.home?.probablePitcher?.id;
+            const aPId = g.teams?.away?.probablePitcher?.id;
+            if (hId) teamIds.add(hId);
+            if (aId) teamIds.add(aId);
+            if (hPId) pitcherIds.add(hPId);
+            if (aPId) pitcherIds.add(aPId);
+          }
+          await Promise.all([
+            ...Array.from(teamIds).map(async id => {
+              const s = await fetchBullpenStatus(id).catch(() => null);
+              if (s) bullpenMap.set(id, s);
+            }),
+            ...Array.from(pitcherIds).map(async id => {
+              const f = await fetchPitcherRecentForm(id, "").catch(() => null);
+              if (f) recentFormMap.set(id, f);
+            }),
+            ...schedule.map(async (g: any) => {
+              const lineup = await fetchConfirmedLineups(g.gamePk).catch(() => null);
+              if (lineup) lineupMap.set(g.gamePk, lineup);
+            }),
+          ]);
+
           for (const game of schedule) {
             const homeTeamId = game.teams?.home?.team?.id;
+            const awayTeamId = game.teams?.away?.team?.id;
             const stadiumInfo = (STADIUM_DATA as any)[homeTeamId];
             let weather: any = null;
             if (stadiumInfo) {
@@ -156,35 +193,30 @@ export async function scheduledRefreshHandler(req: Request, res: Response) {
                 stadiumInfo.altFt, process.env.OPENWEATHER_API_KEY
               ).catch(() => null);
             }
-            const oddsGame = (Array.isArray(oddsData) ? oddsData : []).find((o: any) => {
-              const homeLast = (game.teams?.home?.team?.name || "").split(" ").pop() || "";
-              if (o.home_team === game.teams?.home?.team?.name) return true;
-              const teams = o.bookmakers?.[0]?.markets?.[0]?.outcomes?.map((x: any) => x.name) || [];
-              return teams.some((t: string) => t.includes(homeLast));
-            });
-            const features: any = {
-              homeTeamId: homeTeamId || 0,
-              awayTeamId: game.teams?.away?.team?.id || 0,
-              homeTeamName: game.teams?.home?.team?.name || "",
-              awayTeamName: game.teams?.away?.team?.name || "",
-              homeML: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "h2h")?.outcomes?.find((o: any) => o.name === game.teams?.home?.team?.name)?.price ?? -110,
-              awayML: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "h2h")?.outcomes?.find((o: any) => o.name === game.teams?.away?.team?.name)?.price ?? -110,
-              homeSpread: -1.5, awaySpread: 1.5,
-              homeSpreadOdds: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "spreads")?.outcomes?.find((o: any) => o.name === game.teams?.home?.team?.name)?.price ?? -110,
-              awaySpreadOdds: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "spreads")?.outcomes?.find((o: any) => o.name === game.teams?.away?.team?.name)?.price ?? -110,
-              total: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "totals")?.outcomes?.[0]?.point ?? 8.5,
-              overOdds: -110, underOdds: -110,
-              weather: weather ? { temp: weather.temp, windSpeed: weather.windSpeed, windDir: weather.windDir, humidity: weather.humidity } : undefined,
-              parkFactor: stadiumInfo ? { runs: stadiumInfo.parkFactorRuns, hr: stadiumInfo.parkFactorHR } : undefined,
-              umpire: getUmpireTendency(game.officials?.find((o: any) => o.officialType === "Home Plate")?.official?.fullName || "default"),
-            };
+            // Use canonical matchOddsGame (both-team matching, no Sox/Sox collision)
+            const homeName = game.teams?.home?.team?.name || "";
+            const awayName = game.teams?.away?.team?.name || "";
+            const oddsGame = (Array.isArray(oddsData) ? oddsData : []).find(
+              (o: any) => matchOddsGame(o, homeName, awayName)
+            );
+            // Use canonical buildGameFeaturesSync — no hardcoded fallbacks
+            const features = buildGameFeaturesSync(
+              game, oddsGame,
+              null, null, null, null,
+              weather,
+              bullpenMap.get(homeTeamId),
+              bullpenMap.get(awayTeamId),
+              lineupMap.get(game.gamePk),
+              recentFormMap.get(game.teams?.home?.probablePitcher?.id),
+              recentFormMap.get(game.teams?.away?.probablePitcher?.id)
+            );
             const analysis = analyzeGame(features);
             enriched.push({
               gamePk: game.gamePk, gameDate: date,
-              homeTeam: { id: homeTeamId, name: game.teams?.home?.team?.name },
-              awayTeam: { id: game.teams?.away?.team?.id, name: game.teams?.away?.team?.name },
-              homePitcher: game.teams?.home?.probablePitcher ? { name: game.teams.home.probablePitcher.fullName, era: 4.0, fip: 4.0 } : null,
-              awayPitcher: game.teams?.away?.probablePitcher ? { name: game.teams.away.probablePitcher.fullName, era: 4.0, fip: 4.0 } : null,
+              homeTeam: { id: homeTeamId, name: homeName },
+              awayTeam: { id: awayTeamId, name: awayName },
+              homePitcher: game.teams?.home?.probablePitcher ? { name: game.teams.home.probablePitcher.fullName, era: null, fip: null } : null,
+              awayPitcher: game.teams?.away?.probablePitcher ? { name: game.teams.away.probablePitcher.fullName, era: null, fip: null } : null,
               weather, parkFactor: stadiumInfo, predictions: analysis,
             });
           }

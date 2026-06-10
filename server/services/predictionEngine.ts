@@ -387,6 +387,15 @@ export function predictRunLine(features: GameFeatures): PredictionResult | null 
   const projectedAwayRuns = projectTeamRuns(features, "away");
   const runDiff = projectedHomeRuns - projectedAwayRuns;
 
+  // Zero-guessing policy: only recommend a run line pick when the model projects
+  // a genuine blowout margin (>= 1.8 runs). Close games should be moneyline only.
+  const MIN_RUN_DIFF = 1.8;
+  if (Math.abs(runDiff) < MIN_RUN_DIFF) return null;
+
+  // Zero-guessing policy: only use REAL DK/FD spread odds from the API.
+  // If either side's odds are missing, skip the run line pick entirely.
+  if (!features.homeRunLineOdds || !features.awayRunLineOdds) return null;
+
   // Standard run line is -1.5 for favorite
   const runLine = features.runLine || -1.5;
 
@@ -395,9 +404,9 @@ export function predictRunLine(features: GameFeatures): PredictionResult | null 
   const homeCoverProb = 1 / (1 + Math.exp(-(runDiff - 1.5) * 0.45));
   const awayCoverProb = 1 - homeCoverProb;
 
-  // Use real DK/FD spread odds if available, otherwise fall back to ML-derived estimate
-  const homeSpreadOdds = features.homeRunLineOdds ?? (features.homeMoneyLine ? features.homeMoneyLine - 50 : -110);
-  const awaySpreadOdds = features.awayRunLineOdds ?? (features.awayMoneyLine ? features.awayMoneyLine + 50 : -110);
+  // Use ONLY real DK/FD spread odds — no formula-derived fallbacks
+  const homeSpreadOdds = features.homeRunLineOdds;
+  const awaySpreadOdds = features.awayRunLineOdds;
 
   const homeSpreadImplied = americanToImplied(homeSpreadOdds);
   const awaySpreadImplied = americanToImplied(awaySpreadOdds);
@@ -416,13 +425,15 @@ export function predictRunLine(features: GameFeatures): PredictionResult | null 
   const edgeScore = modelProb - impliedProb;
   const recommendedOdds = isHomePick ? homeSpreadOdds : awaySpreadOdds;
 
-  // Determine correct spread label from actual API data
-  // runLine is the home team's spread point from the API (e.g. -1.5 for favorites, +1.5 for underdogs)
+  // Determine correct spread label from actual API data.
+  // features.runLine is the home team's actual spread point from the API.
+  // e.g. if home team is the favorite: runLine = -1.5, awaySpreadPoint = +1.5
+  // e.g. if home team is the underdog: runLine = +1.5, awaySpreadPoint = -1.5
   const homeSpreadPoint = features.runLine ?? -1.5;
-  const awaySpreadPoint = -homeSpreadPoint; // always the opposite
+  const awaySpreadPoint = -(homeSpreadPoint); // always the mirror
   const pickLabel = isHomePick
-    ? `${features.homeTeamName} ${homeSpreadPoint > 0 ? "+" : ""}${homeSpreadPoint} (${recommendedOdds > 0 ? "+" : ""}${recommendedOdds})`
-    : `${features.awayTeamName} ${awaySpreadPoint > 0 ? "+" : ""}${awaySpreadPoint} (${recommendedOdds > 0 ? "+" : ""}${recommendedOdds})`;
+    ? `${features.homeTeamName} ${homeSpreadPoint >= 0 ? "+" : ""}${homeSpreadPoint} (${recommendedOdds > 0 ? "+" : ""}${recommendedOdds})`
+    : `${features.awayTeamName} ${awaySpreadPoint >= 0 ? "+" : ""}${awaySpreadPoint} (${recommendedOdds > 0 ? "+" : ""}${recommendedOdds})`;
 
   return {
     market: "runline",
