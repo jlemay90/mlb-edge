@@ -354,6 +354,7 @@ export const parlayCards = mysqlTable(
     legsWon: int("legs_won").default(0),
     legsLost: int("legs_lost").default(0),
     lossAnalysis: text("loss_analysis"),
+    postgameDebrief: text("postgame_debrief"), // LLM-generated: what happened, what engine learned, how it improves
     generatedAt: int("generated_at", { unsigned: true }).notNull(), // UTC ms as bigint stored as int
     gradedAt: int("graded_at", { unsigned: true }),
   },

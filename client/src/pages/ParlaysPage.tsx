@@ -28,6 +28,8 @@ import {
   Clock,
   BarChart2,
   Info,
+  BookOpen,
+  Lightbulb,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -66,6 +68,7 @@ interface ParlayCardRow {
   legsWon: number | null;
   legsLost: number | null;
   lossAnalysis: string | null;
+  postgameDebrief: string | null;
   generatedAt: number;
   gradedAt: number | null;
   dbLegs: ParlayLegRow[];
@@ -221,8 +224,13 @@ function ParlayCard({ card }: { card: ParlayCardRow }) {
           </div>
         )}
 
-        {/* Loss analysis */}
-        {card.result === "loss" && card.lossAnalysis && (
+        {/* Post-game debrief (shown for graded cards) */}
+        {card.postgameDebrief && card.result !== "pending" && (
+          <PostGameDebrief debrief={card.postgameDebrief} result={card.result} />
+        )}
+
+        {/* Legacy loss analysis fallback */}
+        {!card.postgameDebrief && card.result === "loss" && card.lossAnalysis && (
           <div className="mt-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
             <div className="flex items-start gap-2">
               <AlertCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />
@@ -235,6 +243,70 @@ function ParlayCard({ card }: { card: ParlayCardRow }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ─── Post-Game Debrief Component ────────────────────────────────────────────
+
+function PostGameDebrief({ debrief, result }: { debrief: string; result: ResultType | null }) {
+  const [open, setOpen] = useState(false);
+  const isWin = result === "win";
+  const borderColor = isWin ? "border-green-500/20" : "border-amber-500/20";
+  const bgColor = isWin ? "bg-green-500/5" : "bg-amber-500/5";
+  const iconColor = isWin ? "text-green-400" : "text-amber-400";
+  const labelColor = isWin ? "text-green-400" : "text-amber-400";
+
+  // Parse sections from the debrief text
+  const sections = [
+    { key: "What Happened", icon: BookOpen, label: "What Happened" },
+    { key: "What the Engine Missed", icon: AlertCircle, label: "What the Engine Missed" },
+    { key: "How We Improve", icon: Lightbulb, label: "How We Improve" },
+  ];
+
+  function extractSection(text: string, heading: string, nextHeading?: string): string {
+    const start = text.indexOf(`**${heading}:**`);
+    if (start === -1) return "";
+    const contentStart = start + heading.length + 6; // skip "**heading:**"
+    const end = nextHeading ? text.indexOf(`**${nextHeading}:**`) : text.length;
+    return text.slice(contentStart, end === -1 ? text.length : end).trim();
+  }
+
+  return (
+    <div className={`mt-2 rounded-lg border ${borderColor} ${bgColor} overflow-hidden`}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/5 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <BookOpen className={`w-3.5 h-3.5 ${iconColor}`} />
+          <span className={`text-xs font-semibold ${labelColor}`}>Post-Game Debrief</span>
+        </div>
+        {open ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+      </button>
+
+      {open && (
+        <div className="px-3 pb-3 space-y-3">
+          {sections.map(({ key, icon: SectionIcon, label }, i) => {
+            const next = sections[i + 1]?.key;
+            const content = extractSection(debrief, key, next);
+            if (!content) return null;
+            return (
+              <div key={key} className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <SectionIcon className="w-3 h-3 text-muted-foreground" />
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
+                </div>
+                <p className="text-xs text-foreground/80 leading-relaxed pl-4">{content}</p>
+              </div>
+            );
+          })}
+          {/* Fallback: show raw debrief if no sections parsed */}
+          {sections.every(({ key }) => !extractSection(debrief, key)) && (
+            <p className="text-xs text-foreground/80 leading-relaxed">{debrief}</p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -409,6 +481,18 @@ export default function ParlaysPage() {
     onError: () => toast.error("Regeneration failed."),
   });
 
+  const gradeNowMutation = trpc.parlay.gradeNow.useMutation({
+    onSuccess: (data) => {
+      if (data.cardsGraded > 0) {
+        toast.success(`Graded ${data.cardsGraded} cards, ${data.legsGraded} legs for ${data.date}`);
+      } else {
+        toast.info(`No pending cards to grade for ${data.date}. ${data.errors[0] ?? ""}`);
+      }
+      historyQuery.refetch();
+    },
+    onError: () => toast.error("Grading failed. Try again."),
+  });
+
   // Auto-trigger generation if today has no parlays
   useEffect(() => {
     if (
@@ -539,14 +623,34 @@ export default function ParlaysPage() {
                     <p className="text-xs text-muted-foreground mt-2">
                       {historyQuery.data.totalParlays} total parlays tracked
                     </p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-xs h-7"
+                        onClick={() => gradeNowMutation.mutate({})}
+                        disabled={gradeNowMutation.isPending}
+                      >
+                        <RefreshCw className={cn("w-3 h-3", gradeNowMutation.isPending && "animate-spin")} />
+                        {gradeNowMutation.isPending ? "Grading..." : "Grade Yesterday's Results"}
+                      </Button>
+                      <span className="text-[11px] text-muted-foreground">Runs automatically each morning</span>
+                    </div>
                   </div>
                 )}
 
                 {/* Day-by-day history */}
                 {historyQuery.data?.days.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    No history yet — parlays will appear here after today's games complete.
-                  </p>
+                  <div className="text-center py-8 space-y-3">
+                    <Clock className="w-8 h-8 text-muted-foreground mx-auto" />
+                    <p className="text-sm text-muted-foreground">
+                      No graded history yet.
+                    </p>
+                    <p className="text-xs text-muted-foreground/70">
+                      Today's picks are pending — results will be graded automatically tonight after games finish,
+                      or click "Grade Yesterday's Results" above to check now.
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     {historyQuery.data?.days.map(({ date, cards: daycards }) => (

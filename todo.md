@@ -164,3 +164,13 @@
 - [x] Fix refreshHandler.ts: replace local matchOddsGame (Sox/Sox bug) with canonical both-team matcher
 - [x] Fix refreshHandler.ts: replace hardcoded feature building (?? -110, ?? 8.5) with buildGameFeaturesSync
 - [x] 36/36 tests passing, TypeScript clean after all fixes
+
+## Post-Game Debrief System
+- [x] Add postgame_debrief column to parlay_cards schema + migrate (ALTER TABLE applied)
+- [x] Build parlayGrader.ts: fetchFinalScores, gradeLeg (ML/RL/total/prop), LLM debrief generator
+- [x] Wire grader into refreshHandler.ts nightly cron (grades yesterday's cards automatically)
+- [x] Add gradeNow tRPC mutation for manual backfill trigger (defaults to yesterday)
+- [x] Add PostGameDebrief component to ParlaysPage with 3-section expandable debrief
+- [x] Add "Grade Yesterday's Results" button to History tab
+- [x] Update empty history message to explain pending state clearly
+- [x] 36/36 tests passing, TypeScript clean after all debrief changes

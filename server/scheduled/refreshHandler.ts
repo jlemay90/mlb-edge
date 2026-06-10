@@ -19,6 +19,7 @@ import { generateDailyParlays } from "../services/parlayEngine";
 import { buildGameFeaturesSync } from "../mlbRouter";
 import { parlayCards, parlayLegs } from "../../drizzle/schema";
 import { eq, inArray } from "drizzle-orm";
+import { gradePendingParlays } from "../services/parlayGrader";
 
 // Match an Odds API game to an MLB schedule game by team name.
 // MUST match BOTH home AND away to prevent false positives (e.g. White Sox vs Red Sox).
@@ -122,7 +123,20 @@ export async function scheduledRefreshHandler(req: Request, res: Response) {
       }
     }
 
-    // 3. Generate today's parlays if not already done
+    // 3. Grade yesterday's pending parlays (runs every time — idempotent, skips already-graded legs)
+    let gradeResult: Awaited<ReturnType<typeof gradePendingParlays>> | null = null;
+    try {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split("T")[0];
+      gradeResult = await gradePendingParlays(yesterdayStr);
+      console.log(`[scheduled] Graded ${gradeResult.cardsGraded} cards, ${gradeResult.legsGraded} legs for ${yesterdayStr}`);
+      if (gradeResult.errors.length) console.warn("[scheduled] Grade errors:", gradeResult.errors);
+    } catch (gradeErr) {
+      console.error("[scheduled] Grading failed:", (gradeErr as Error).message);
+    }
+
+    // 4. Generate today's parlays if not already done
     let parlaysGenerated = 0;
     if (db && schedule.length) {
       const existing = await db
@@ -257,6 +271,7 @@ export async function scheduledRefreshHandler(req: Request, res: Response) {
       oddsGames: Array.isArray(oddsData) ? oddsData.length : 0,
       snapshots,
       parlaysGenerated,
+      grading: gradeResult ?? null,
       timestamp: Date.now(),
     });
   } catch (err) {

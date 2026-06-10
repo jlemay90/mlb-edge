@@ -16,6 +16,7 @@ import {
   type ParlayType,
   type ParlayLegInput,
 } from "./services/parlayEngine";
+import { gradePendingParlays } from "./services/parlayGrader";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -458,5 +459,21 @@ export const parlayRouter = router({
         const d = typeof f.date === "string" ? f.date : (f.date as Date).toISOString().split("T")[0];
         return d >= cutoffStr;
       });
+    }),
+
+  /**
+   * Manually trigger grading for a specific date (defaults to yesterday).
+   * Useful for backfilling results after games finish.
+   */
+  gradeNow: publicProcedure
+    .input(z.object({ date: z.string().optional() }).optional())
+    .mutation(async ({ input }) => {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const date = input?.date ?? yesterday.toISOString().split("T")[0];
+      const result = await gradePendingParlays(date);
+      // Invalidate history cache so the UI picks up fresh data
+      invalidate(`parlays:history:${date}`);
+      return result;
     }),
 });
