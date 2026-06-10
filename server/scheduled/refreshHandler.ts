@@ -13,7 +13,11 @@ import { sdk } from "../_core/sdk";
 import { getDb } from "../db";
 import { oddsSnapshots } from "../../drizzle/schema";
 import { invalidate } from "../services/cache";
-import { fetchTodaysSchedule, fetchMLBOdds } from "../services/mlbData";
+import { fetchTodaysSchedule, fetchMLBOdds, fetchMLBPlayerProps, STADIUM_DATA, getUmpireTendency, fetchGameWeather } from "../services/mlbData";
+import { analyzeGame } from "../services/predictionEngine";
+import { generateDailyParlays } from "../services/parlayEngine";
+import { parlayCards, parlayLegs } from "../../drizzle/schema";
+import { eq, inArray } from "drizzle-orm";
 
 // Match an Odds API game to an MLB schedule game by team name (mirrors
 // matchOddsGame in mlbRouter, kept local to avoid a router import cycle).
@@ -113,12 +117,99 @@ export async function scheduledRefreshHandler(req: Request, res: Response) {
       }
     }
 
+    // 3. Generate today's parlays if not already done
+    let parlaysGenerated = 0;
+    if (db && schedule.length) {
+      const existing = await db
+        .select({ id: parlayCards.id })
+        .from(parlayCards)
+        .where(eq(parlayCards.date, new Date(date)))
+        .limit(1);
+
+      if (existing.length === 0) {
+        try {
+          // Enrich games with predictions
+          const rawProps = await fetchMLBPlayerProps("player_props").catch(() => []);
+          const enriched: any[] = [];
+          for (const game of schedule) {
+            const homeTeamId = game.teams?.home?.team?.id;
+            const stadiumInfo = (STADIUM_DATA as any)[homeTeamId];
+            let weather: any = null;
+            if (stadiumInfo) {
+              weather = await fetchGameWeather(
+                game.gamePk, stadiumInfo.lat, stadiumInfo.lon,
+                stadiumInfo.altFt, process.env.OPENWEATHER_API_KEY
+              ).catch(() => null);
+            }
+            const oddsGame = (Array.isArray(oddsData) ? oddsData : []).find((o: any) => {
+              const homeLast = (game.teams?.home?.team?.name || "").split(" ").pop() || "";
+              if (o.home_team === game.teams?.home?.team?.name) return true;
+              const teams = o.bookmakers?.[0]?.markets?.[0]?.outcomes?.map((x: any) => x.name) || [];
+              return teams.some((t: string) => t.includes(homeLast));
+            });
+            const features: any = {
+              homeTeamId: homeTeamId || 0,
+              awayTeamId: game.teams?.away?.team?.id || 0,
+              homeTeamName: game.teams?.home?.team?.name || "",
+              awayTeamName: game.teams?.away?.team?.name || "",
+              homeML: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "h2h")?.outcomes?.find((o: any) => o.name === game.teams?.home?.team?.name)?.price ?? -110,
+              awayML: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "h2h")?.outcomes?.find((o: any) => o.name === game.teams?.away?.team?.name)?.price ?? -110,
+              homeSpread: -1.5, awaySpread: 1.5,
+              homeSpreadOdds: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "spreads")?.outcomes?.find((o: any) => o.name === game.teams?.home?.team?.name)?.price ?? -110,
+              awaySpreadOdds: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "spreads")?.outcomes?.find((o: any) => o.name === game.teams?.away?.team?.name)?.price ?? -110,
+              total: oddsGame?.bookmakers?.[0]?.markets?.find((m: any) => m.key === "totals")?.outcomes?.[0]?.point ?? 8.5,
+              overOdds: -110, underOdds: -110,
+              weather: weather ? { temp: weather.temp, windSpeed: weather.windSpeed, windDir: weather.windDir, humidity: weather.humidity } : undefined,
+              parkFactor: stadiumInfo ? { runs: stadiumInfo.parkFactorRuns, hr: stadiumInfo.parkFactorHR } : undefined,
+              umpire: getUmpireTendency(game.officials?.find((o: any) => o.officialType === "Home Plate")?.official?.fullName || "default"),
+            };
+            const analysis = analyzeGame(features);
+            enriched.push({
+              gamePk: game.gamePk, gameDate: date,
+              homeTeam: { id: homeTeamId, name: game.teams?.home?.team?.name },
+              awayTeam: { id: game.teams?.away?.team?.id, name: game.teams?.away?.team?.name },
+              homePitcher: game.teams?.home?.probablePitcher ? { name: game.teams.home.probablePitcher.fullName, era: 4.0, fip: 4.0 } : null,
+              awayPitcher: game.teams?.away?.probablePitcher ? { name: game.teams.away.probablePitcher.fullName, era: 4.0, fip: 4.0 } : null,
+              weather, parkFactor: stadiumInfo, predictions: analysis,
+            });
+          }
+
+          const parlays = generateDailyParlays(enriched, Array.isArray(rawProps) ? rawProps : []);
+          const now = Date.now();
+          for (const parlay of parlays) {
+            const [inserted] = await db.insert(parlayCards).values({
+              date: new Date(date), type: parlay.type,
+              legs: parlay.legs as any, combinedOdds: parlay.combinedOdds,
+              totalLegs: parlay.totalLegs, reasoning: parlay.reasoning,
+              result: "pending", legsWon: 0, legsLost: 0, generatedAt: now,
+            });
+            const cardId = (inserted as any).insertId;
+            if (!cardId) continue;
+            for (const leg of parlay.legs) {
+              await db.insert(parlayLegs).values({
+                parlayCardId: cardId, gamePk: leg.gamePk,
+                gameDate: new Date(leg.gameDate), homeTeam: leg.homeTeam,
+                awayTeam: leg.awayTeam, market: leg.market, pick: leg.pick,
+                pickLabel: leg.pickLabel, odds: leg.odds,
+                edgeScore: leg.edgeScore, modelProbability: leg.modelProbability,
+                reasoning: leg.reasoning, result: "pending",
+              });
+            }
+            parlaysGenerated++;
+          }
+        } catch (parlayErr) {
+          console.error("[scheduled] Parlay generation failed:", (parlayErr as Error).message);
+        }
+      }
+    }
+
     return res.json({
       ok: true,
       date,
       games: schedule.length,
       oddsGames: Array.isArray(oddsData) ? oddsData.length : 0,
       snapshots,
+      parlaysGenerated,
       timestamp: Date.now(),
     });
   } catch (err) {

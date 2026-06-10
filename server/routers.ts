@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { mlbRouter } from "./mlbRouter";
 import { stripeRouter } from "./stripe/stripeRouter";
+import { parlayRouter } from "./parlayRouter";
 import { getSubscriptionByOpenId } from "./db";
 
 export const appRouter = router({
@@ -46,6 +47,7 @@ export const appRouter = router({
 
   mlb: mlbRouter,
   stripe: stripeRouter,
+  parlay: parlayRouter,
 
   // TODO: add feature routers here, e.g.
   // todo: router({

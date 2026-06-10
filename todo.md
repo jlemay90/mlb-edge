@@ -113,3 +113,18 @@
 ## Pinned — Next Session
 - [ ] Add "Contact Support to Cancel" button on billing page (friction before self-serve cancel)
 - [ ] Add Tip Jar feature (one-time payment option for users who want to support the platform)
+
+## Parlays of the Day (Sharp Feature)
+- [x] DB schema: parlayCards table (id, date, type, legs JSON, combinedOdds, reasoning, result, createdAt)
+- [x] DB schema: parlayLegs table (id, parlayCardId, gamePk, market, pick, odds, reasoning, result, actualOutcome)
+- [x] DB schema: parlayModelFeedback table (id, date, missedReason, marketType, notes)
+- [x] Server: parlayEngine.ts — builds Power/Value/Lotto/HighValue/HRProp parlays from live game data
+- [x] Server: parlayRouter.ts — tRPC procedures: getToday, generate, gradeLegs, getLogs, getHistory, getFeedback
+- [x] Server: wire parlayRouter into routers.ts
+- [x] Server: add parlay generation to refreshHandler.ts cron job (runs 9 AM ET)
+- [x] Frontend: ParlaysPage.tsx — Sharp-gated, shows all 5 parlay types with full reasoning
+- [x] Frontend: Parlay card component — legs list, combined odds, win/loss badge, reasoning accordion
+- [x] Frontend: Parlay log section — daily history, record tally (W-L), loss analysis notes
+- [x] Frontend: Add /parlays route to App.tsx and nav sidebar
+- [x] DB migration: applied via webdev_execute_sql
+- [x] TypeScript: 0 errors, 16/16 tests passing

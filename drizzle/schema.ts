@@ -337,3 +337,72 @@ export const backtestResults = mysqlTable("backtest_results", {
 });
 
 export type BacktestResult = typeof backtestResults.$inferSelect;
+
+// ─── Parlay Cards ─────────────────────────────────────────────────────────────
+
+export const parlayCards = mysqlTable(
+  "parlay_cards",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    date: date("date").notNull(),
+    type: mysqlEnum("type", ["power", "value", "lotto", "highvalue", "hrprop"]).notNull(),
+    legs: json("legs").notNull(), // ParlayLegInput[]
+    combinedOdds: int("combined_odds").notNull(),
+    totalLegs: int("total_legs").default(0).notNull(),
+    reasoning: text("reasoning"),
+    result: mysqlEnum("result", ["pending", "win", "loss", "push"]).default("pending"),
+    legsWon: int("legs_won").default(0),
+    legsLost: int("legs_lost").default(0),
+    lossAnalysis: text("loss_analysis"),
+    generatedAt: int("generated_at", { unsigned: true }).notNull(), // UTC ms as bigint stored as int
+    gradedAt: int("graded_at", { unsigned: true }),
+  },
+  (t) => [index("idx_parlay_date").on(t.date), index("idx_parlay_type").on(t.type)]
+);
+
+export type ParlayCard = typeof parlayCards.$inferSelect;
+
+// ─── Parlay Legs ──────────────────────────────────────────────────────────────
+
+export const parlayLegs = mysqlTable(
+  "parlay_legs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    parlayCardId: int("parlay_card_id").notNull(),
+    gamePk: int("game_pk").notNull(),
+    gameDate: date("game_date").notNull(),
+    homeTeam: varchar("home_team", { length: 100 }),
+    awayTeam: varchar("away_team", { length: 100 }),
+    market: mysqlEnum("market", ["moneyline", "runline", "total", "prop"]).notNull(),
+    pick: varchar("pick", { length: 200 }).notNull(),
+    pickLabel: varchar("pick_label", { length: 300 }),
+    odds: int("odds").notNull(),
+    edgeScore: float("edge_score"),
+    modelProbability: float("model_probability"),
+    reasoning: text("reasoning"),
+    result: mysqlEnum("result", ["pending", "win", "loss", "push"]).default("pending"),
+    actualOutcome: varchar("actual_outcome", { length: 200 }),
+  },
+  (t) => [index("idx_leg_parlay").on(t.parlayCardId), index("idx_leg_game").on(t.gamePk)]
+);
+
+export type ParlayLeg = typeof parlayLegs.$inferSelect;
+
+// ─── Parlay Model Feedback ────────────────────────────────────────────────────
+
+export const parlayModelFeedback = mysqlTable(
+  "parlay_model_feedback",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    date: date("date").notNull(),
+    parlayType: mysqlEnum("parlay_type", ["power", "value", "lotto", "highvalue", "hrprop"]).notNull(),
+    marketType: varchar("market_type", { length: 50 }),
+    missedReason: text("missed_reason"),
+    dataSignals: text("data_signals"),
+    improvementNote: text("improvement_note"),
+    createdAt: int("created_at", { unsigned: true }).notNull(),
+  },
+  (t) => [index("idx_feedback_date").on(t.date)]
+);
+
+export type ParlayModelFeedback = typeof parlayModelFeedback.$inferSelect;
