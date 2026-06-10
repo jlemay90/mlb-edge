@@ -8,7 +8,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import { parlayCards, parlayLegs, parlayModelFeedback } from "../drizzle/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { cached, TTL } from "./services/cache";
+import { cached, TTL, invalidate } from "./services/cache";
 import {
   generateDailyParlays,
   combineParlayOdds,
@@ -41,10 +41,14 @@ export const parlayRouter = router({
       const cards = await db
         .select()
         .from(parlayCards)
-        .where(eq(parlayCards.date, new Date(today)))
+        .where(eq(parlayCards.date, today))
         .orderBy(parlayCards.id);
 
-      if (cards.length === 0) return { cards: [], generatedAt: null, date: today };
+      // Don't cache empty results — let next call try again
+      if (cards.length === 0) {
+        invalidate(`parlays:today:${today}`);
+        return { cards: [], generatedAt: null, date: today };
+      }
 
       // Attach legs to each card
       const cardIds = cards.map((c) => c.id);
@@ -89,19 +93,23 @@ export const parlayRouter = router({
         const existing = await db
           .select({ id: parlayCards.id })
           .from(parlayCards)
-          .where(eq(parlayCards.date, new Date(today)))
+          .where(eq(parlayCards.date, today))
           .limit(1);
-        if (existing.length > 0) return { generated: false, reason: "already_exists" };
+        if (existing.length > 0) {
+          // Bust cache so getToday picks up the existing records
+          invalidate(`parlays:today:${today}`);
+          return { generated: false, reason: "already_exists" };
+        }
       } else {
         // Force regenerate — delete today's cards and legs
         const existing = await db
           .select({ id: parlayCards.id })
           .from(parlayCards)
-          .where(eq(parlayCards.date, new Date(today)));
+          .where(eq(parlayCards.date, today));
         if (existing.length > 0) {
           const ids = existing.map((c) => c.id);
           await db.delete(parlayLegs).where(inArray(parlayLegs.parlayCardId, ids));
-          await db.delete(parlayCards).where(eq(parlayCards.date, new Date(today)));
+          await db.delete(parlayCards).where(eq(parlayCards.date, today));
         }
       }
 
@@ -178,7 +186,7 @@ export const parlayRouter = router({
       for (const parlay of parlays) {
         // Insert parlay card
         const [inserted] = await db.insert(parlayCards).values({
-          date: new Date(today),
+          date: today,
           type: parlay.type,
           legs: parlay.legs as any,
           combinedOdds: parlay.combinedOdds,
@@ -198,7 +206,7 @@ export const parlayRouter = router({
           await db.insert(parlayLegs).values({
             parlayCardId: cardId,
             gamePk: leg.gamePk,
-            gameDate: new Date(leg.gameDate),
+            gameDate: typeof leg.gameDate === 'string' ? leg.gameDate : new Date(leg.gameDate).toISOString().split('T')[0],
             homeTeam: leg.homeTeam,
             awayTeam: leg.awayTeam,
             market: leg.market,
@@ -217,6 +225,9 @@ export const parlayRouter = router({
 
       // Invalidate cache
       // (cache will auto-expire; next getToday call will re-fetch from DB)
+
+      // Bust cache so getToday immediately returns the new parlays
+      invalidate(`parlays:today:${today}`);
 
       return { generated: true, count: savedCount, date: today };
     }),

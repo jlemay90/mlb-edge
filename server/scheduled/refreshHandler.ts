@@ -123,7 +123,7 @@ export async function scheduledRefreshHandler(req: Request, res: Response) {
       const existing = await db
         .select({ id: parlayCards.id })
         .from(parlayCards)
-        .where(eq(parlayCards.date, new Date(date)))
+        .where(eq(parlayCards.date, date))
         .limit(1);
 
       if (existing.length === 0) {
@@ -178,7 +178,7 @@ export async function scheduledRefreshHandler(req: Request, res: Response) {
           const now = Date.now();
           for (const parlay of parlays) {
             const [inserted] = await db.insert(parlayCards).values({
-              date: new Date(date), type: parlay.type,
+              date: date, type: parlay.type,
               legs: parlay.legs as any, combinedOdds: parlay.combinedOdds,
               totalLegs: parlay.totalLegs, reasoning: parlay.reasoning,
               result: "pending", legsWon: 0, legsLost: 0, generatedAt: now,
@@ -188,7 +188,7 @@ export async function scheduledRefreshHandler(req: Request, res: Response) {
             for (const leg of parlay.legs) {
               await db.insert(parlayLegs).values({
                 parlayCardId: cardId, gamePk: leg.gamePk,
-                gameDate: new Date(leg.gameDate), homeTeam: leg.homeTeam,
+                gameDate: typeof leg.gameDate === 'string' ? leg.gameDate : new Date(leg.gameDate).toISOString().split('T')[0], homeTeam: leg.homeTeam,
                 awayTeam: leg.awayTeam, market: leg.market, pick: leg.pick,
                 pickLabel: leg.pickLabel, odds: leg.odds,
                 edgeScore: leg.edgeScore, modelProbability: leg.modelProbability,

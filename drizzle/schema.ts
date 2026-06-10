@@ -344,7 +344,7 @@ export const parlayCards = mysqlTable(
   "parlay_cards",
   {
     id: int("id").autoincrement().primaryKey(),
-    date: date("date").notNull(),
+    date: date("date", { mode: "string" }).notNull(),
     type: mysqlEnum("type", ["power", "value", "lotto", "highvalue", "hrprop"]).notNull(),
     legs: json("legs").notNull(), // ParlayLegInput[]
     combinedOdds: int("combined_odds").notNull(),
@@ -370,7 +370,7 @@ export const parlayLegs = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     parlayCardId: int("parlay_card_id").notNull(),
     gamePk: int("game_pk").notNull(),
-    gameDate: date("game_date").notNull(),
+    gameDate: date("game_date", { mode: "string" }).notNull(),
     homeTeam: varchar("home_team", { length: 100 }),
     awayTeam: varchar("away_team", { length: 100 }),
     market: mysqlEnum("market", ["moneyline", "runline", "total", "prop"]).notNull(),
