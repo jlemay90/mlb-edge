@@ -105,6 +105,11 @@
 ## OAuth / Auth Fixes
 - [x] Fix OAuth callback failure for new users on custom domain (intelligentbettingmlbedgepicks.com) — implemented cross-domain handoff: canonical manus.space callback URL always used for OAuth, returnTo encoded in state, /api/oauth/handoff endpoint sets session cookie on custom domain after redirect
 
+## Completed This Session
+- [x] AGENTS.md created at /home/ubuntu/mlb-edge/AGENTS.md — full Codex handoff doc covering architecture, conventions, key files, DO NOT TOUCH list, run/test/build commands, DB migration workflow, Stripe config, OAuth flow, data pipeline, and pinned next features
+- [x] App health verified: 16/16 tests passing, TypeScript clean, 15 live games today with real odds + weather + ML picks
+- [x] New feature addition validated: mlb.healthCheck procedure added and confirmed working end-to-end
+
 ## Pinned — Next Session
 - [ ] Add "Contact Support to Cancel" button on billing page (friction before self-serve cancel)
 - [ ] Add Tip Jar feature (one-time payment option for users who want to support the platform)

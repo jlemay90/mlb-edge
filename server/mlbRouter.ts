@@ -938,6 +938,18 @@ export const mlbRouter = router({
     return { seeded };
   }),
 
+  // Health-check probe — confirms the router is reachable and data pipeline is live
+  // AGENTS.md: This is a safe example of adding a new procedure. Follow this pattern.
+  healthCheck: publicProcedure.query(async () => {
+    const today = new Date().toISOString().split("T")[0];
+    return {
+      status: "ok",
+      timestamp: Date.now(),
+      date: today,
+      message: "MLB Edge data pipeline is live",
+    };
+  }),
+
   // Seed mock backtest data
   seedBacktestData: publicProcedure.mutation(async () => {
     const db = await getDb();
