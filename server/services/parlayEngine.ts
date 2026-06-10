@@ -8,6 +8,17 @@
  *   hrprop   — top 5 HR prop picks with Statcast/weather reasoning
  */
 
+import { PARK_FACTOR_SPLITS } from "./mlbData";
+
+/** Get HR park factor for a given team and batter handedness */
+function getParkFactorSplit(teamId: number, hand: string | null): number {
+  const splits = PARK_FACTOR_SPLITS[teamId];
+  if (!splits) return 100;
+  if (hand === "L") return splits.hrL;
+  if (hand === "R") return splits.hrR;
+  return Math.round((splits.hrL + splits.hrR) / 2);
+}
+
 export type ParlayType = "power" | "value" | "lotto" | "highvalue" | "hrprop";
 
 export interface ParlayLegInput {
@@ -327,24 +338,43 @@ function buildHighValueParlay(candidates: CandidateLeg[]): GeneratedParlay {
 }
 
 function buildHRPropParlay(games: any[]): GeneratedParlay {
-  // Top 5 HR prop picks using park factors, weather, Statcast proxies
+  // Top 5 HR prop picks using park factors, weather, Statcast matchup data, and handedness splits
   const hrCandidates: ParlayLegInput[] = [];
 
   for (const game of games) {
     const weather = game.weather;
     const parkFactor = game.parkFactor;
+    const homeTeamId = game.homeTeam?.id;
     const hrFriendly = (parkFactor?.hr ?? 100) > 103;
     const windOut = weather?.windDir?.toLowerCase().includes("out");
     const hotDay = (weather?.temp ?? 70) > 78;
     const conditions = [hrFriendly, windOut, hotDay].filter(Boolean).length;
 
-    // Use pitcher stats as proxy for HR vulnerability
     const homePitcher = game.homePitcher;
     const awayPitcher = game.awayPitcher;
 
+    // Pull real matchup data if available from modelSignals
+    const homeMatchup = game.modelSignals?.homeMatchup ?? null;
+    const awayMatchup = game.modelSignals?.awayMatchup ?? null;
+
+    // Handedness-split park factor for home team
+    // modelSignals may carry lineup handedness; fall back to neutral
+    const homeHandedness = game.modelSignals?.homeLineupHand ?? null;
+    const awayHandedness = game.modelSignals?.awayLineupHand ?? null;
+
     // Home team batters vs away pitcher
-    if (awayPitcher && awayPitcher.era > 4.5 && conditions >= 1) {
+    if (awayPitcher && awayPitcher.era > 4.2 && conditions >= 1) {
       const homeTeamName = game.homeTeam?.name ?? "Home";
+      // Real matchup score if available, else estimate from ERA + conditions
+      const matchupScore = homeMatchup?.hrScore ?? (0.08 + conditions * 0.02);
+      const barrelPct = homeMatchup?.hardHitPct != null ? homeMatchup.hardHitPct * 100 : 9.5;
+      const avgExitVelo = homeMatchup?.xba != null ? 88 + homeMatchup.xba * 30 : 91.2;
+      const iso = homeMatchup?.slg != null ? homeMatchup.slg * 0.55 : 0.18;
+      const hrRate = homeMatchup?.pa >= 5 ? homeMatchup.hr / homeMatchup.pa : 0.08 + conditions * 0.02;
+      // Handedness-split park factor
+      const pfSplit = homeTeamId ? getParkFactorSplit(homeTeamId, homeHandedness) : (parkFactor?.hr ?? 100);
+      const pfBonus = pfSplit > 105 ? 0.015 : pfSplit < 95 ? -0.01 : 0;
+      const edgeScore = Math.min(0.06 + conditions * 0.025 + matchupScore * 0.08 + pfBonus, 0.35);
       hrCandidates.push({
         gamePk: game.gamePk,
         gameDate: game.gameDate,
@@ -354,24 +384,26 @@ function buildHRPropParlay(games: any[]): GeneratedParlay {
         pick: "over",
         pickLabel: `${homeTeamName} batter HR (vs ${awayPitcher.name ?? "Away SP"})`,
         odds: -115,
-        edgeScore: 0.06 + conditions * 0.03,
-        modelProbability: 0.52 + conditions * 0.04,
+        edgeScore,
+        modelProbability: 0.50 + conditions * 0.04 + matchupScore * 0.06,
         reasoning: buildHRReasoning(
-          {
-            recentHRRate: 0.08 + conditions * 0.02,
-            barrelPct: 9.5,
-            avgExitVelo: 91.2,
-            iso: 0.18,
-            vsHandedness: awayPitcher.name ? "this matchup" : null,
-          },
+          { recentHRRate: hrRate, barrelPct, avgExitVelo, iso, vsHandedness: awayPitcher.throws ? `${awayPitcher.throws}HP` : null },
           game
         ),
       });
     }
 
     // Away team batters vs home pitcher
-    if (homePitcher && homePitcher.era > 4.5 && conditions >= 1) {
+    if (homePitcher && homePitcher.era > 4.2 && conditions >= 1) {
       const awayTeamName = game.awayTeam?.name ?? "Away";
+      const matchupScore = awayMatchup?.hrScore ?? (0.07 + conditions * 0.02);
+      const barrelPct = awayMatchup?.hardHitPct != null ? awayMatchup.hardHitPct * 100 : 8.8;
+      const avgExitVelo = awayMatchup?.xba != null ? 88 + awayMatchup.xba * 30 : 90.5;
+      const iso = awayMatchup?.slg != null ? awayMatchup.slg * 0.55 : 0.165;
+      const hrRate = awayMatchup?.pa >= 5 ? awayMatchup.hr / awayMatchup.pa : 0.07 + conditions * 0.02;
+      const pfSplit = homeTeamId ? getParkFactorSplit(homeTeamId, awayHandedness) : (parkFactor?.hr ?? 100);
+      const pfBonus = pfSplit > 105 ? 0.012 : pfSplit < 95 ? -0.01 : 0;
+      const edgeScore = Math.min(0.05 + conditions * 0.022 + matchupScore * 0.07 + pfBonus, 0.32);
       hrCandidates.push({
         gamePk: game.gamePk,
         gameDate: game.gameDate,
@@ -381,16 +413,10 @@ function buildHRPropParlay(games: any[]): GeneratedParlay {
         pick: "over",
         pickLabel: `${awayTeamName} batter HR (vs ${homePitcher.name ?? "Home SP"})`,
         odds: -115,
-        edgeScore: 0.05 + conditions * 0.025,
-        modelProbability: 0.50 + conditions * 0.035,
+        edgeScore,
+        modelProbability: 0.48 + conditions * 0.035 + matchupScore * 0.05,
         reasoning: buildHRReasoning(
-          {
-            recentHRRate: 0.07 + conditions * 0.02,
-            barrelPct: 8.8,
-            avgExitVelo: 90.5,
-            iso: 0.165,
-            vsHandedness: null,
-          },
+          { recentHRRate: hrRate, barrelPct, avgExitVelo, iso, vsHandedness: homePitcher.throws ? `${homePitcher.throws}HP` : null },
           game
         ),
       });

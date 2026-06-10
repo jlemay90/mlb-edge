@@ -25,6 +25,10 @@ import {
   UMPIRE_DATA,
   getUmpireTendency,
   fetchGameWeather,
+  fetchBullpenStatus,
+  fetchConfirmedLineups,
+  fetchPitcherRecentForm,
+  getParkFactorForHandedness,
 } from "./services/mlbData";
 import {
   analyzeGame,
@@ -92,7 +96,13 @@ export function buildGameFeaturesSync(
   awayTeamStatsRow: any,
   homePitcherRow: any,
   awayPitcherRow: any,
-  weather: any
+  weather: any,
+  // New model upgrade data (all optional for backward compat)
+  homeBullpen?: any,
+  awayBullpen?: any,
+  lineupData?: any,
+  homePitcherForm?: any,
+  awayPitcherForm?: any
 ): GameFeatures {
   const homeTeamId = game.teams?.home?.team?.id;
   const awayTeamId = game.teams?.away?.team?.id;
@@ -237,6 +247,19 @@ export function buildGameFeaturesSync(
     runLine,
     homeRunLineOdds,
     awayRunLineOdds,
+    // Bullpen (model upgrade 3)
+    homeBullpenRestScore: homeBullpen?.restScore,
+    awayBullpenRestScore: awayBullpen?.restScore,
+    homeBullpenFatiguedCount: homeBullpen?.fatiguedRelievers,
+    awayBullpenFatiguedCount: awayBullpen?.fatiguedRelievers,
+    // Confirmed lineup (model upgrade 1)
+    homeLineupConfirmed: !!(lineupData?.home?.length),
+    awayLineupConfirmed: !!(lineupData?.away?.length),
+    homeLineupCount: lineupData?.home?.length,
+    awayLineupCount: lineupData?.away?.length,
+    // Pitcher recent form trend (model upgrade 2)
+    homePitcherTrend: homePitcherForm?.trend,
+    awayPitcherTrend: awayPitcherForm?.trend,
   };
 }
 
@@ -275,26 +298,49 @@ async function fetchAllGameData(schedule: any[]) {
   const pitcherStatsMap = new Map<number, any>();
   for (const row of (allPitcherStats as any[])) pitcherStatsMap.set(row.playerId, row);
 
-  // Fetch weather for all games in parallel
+  // Collect unique team IDs and pitcher IDs for new fetches
+  const allTeamIds = Array.from(teamIds);
+  const allPitcherIds = Array.from(pitcherIds);
+
+  // Fetch weather, bullpen status, confirmed lineups, and pitcher recent form in parallel
   const weatherMap = new Map<number, any>();
-  await Promise.all(
-    schedule.map(async (game) => {
+  const bullpenMap = new Map<number, any>(); // teamId -> BullpenStatus
+  const lineupMap = new Map<number, any>();  // gamePk -> confirmed lineup
+  const recentFormMap = new Map<number, any>(); // playerId -> PitcherRecentForm
+
+  await Promise.all([
+    // Weather
+    ...schedule.map(async (game: any) => {
       const homeId = game.teams?.home?.team?.id;
       const stadiumInfo = STADIUM_DATA[homeId];
       if (stadiumInfo) {
         const w = await fetchGameWeather(
-          game.gamePk,
-          stadiumInfo.lat,
-          stadiumInfo.lon,
-          stadiumInfo.altFt,
-          process.env.OPENWEATHER_API_KEY
-        );
+          game.gamePk, stadiumInfo.lat, stadiumInfo.lon,
+          stadiumInfo.altFt, process.env.OPENWEATHER_API_KEY
+        ).catch(() => null);
         if (w) weatherMap.set(game.gamePk, w);
       }
-    })
-  );
+    }),
+    // Bullpen status for all unique teams
+    ...allTeamIds.map(async (teamId: number) => {
+      const status = await fetchBullpenStatus(teamId).catch(() => null);
+      if (status) bullpenMap.set(teamId, status);
+    }),
+    // Confirmed lineups for each game
+    ...schedule.map(async (game: any) => {
+      const lineup = await fetchConfirmedLineups(game.gamePk).catch(() => null);
+      if (lineup) lineupMap.set(game.gamePk, lineup);
+    }),
+    // Pitcher recent form for all probable pitchers
+    ...allPitcherIds.map(async (playerId: number) => {
+      const pitcherRow = (allPitcherStats as any[]).find((p: any) => p.playerId === playerId);
+      const name = pitcherRow?.fullName || "Unknown";
+      const form = await fetchPitcherRecentForm(playerId, name).catch(() => null);
+      if (form) recentFormMap.set(playerId, form);
+    }),
+  ]);
 
-  return { teamStatsMap, pitcherStatsMap, weatherMap };
+  return { teamStatsMap, pitcherStatsMap, weatherMap, bullpenMap, lineupMap, recentFormMap };
 }
 
 // ─── Match odds game by team name ─────────────────────────────────────────────
@@ -330,7 +376,7 @@ export const mlbRouter = router({
 
       if (!schedule.length) return [];
 
-      const { teamStatsMap, pitcherStatsMap, weatherMap } = await fetchAllGameData(schedule);
+      const { teamStatsMap, pitcherStatsMap, weatherMap, bullpenMap, lineupMap, recentFormMap } = await fetchAllGameData(schedule);
 
       const games = await Promise.all(
         schedule.map(async (game: any) => {
@@ -341,6 +387,11 @@ export const mlbRouter = router({
           const oddsGame = matchOddsGame(game, oddsData);
           const stadiumInfo = STADIUM_DATA[homeTeamId];
           const weather = weatherMap.get(game.gamePk);
+          const homeBullpen = bullpenMap.get(homeTeamId);
+          const awayBullpen = bullpenMap.get(awayTeamId);
+          const lineupData = lineupMap.get(game.gamePk);
+          const homePitcherForm = recentFormMap.get(game.teams?.home?.probablePitcher?.id);
+          const awayPitcherForm = recentFormMap.get(game.teams?.away?.probablePitcher?.id);
 
           // Umpire full object
           const umpireName = game.officials?.find(
@@ -354,7 +405,12 @@ export const mlbRouter = router({
             teamStatsMap.get(awayTeamId),
             pitcherStatsMap.get(game.teams?.home?.probablePitcher?.id),
             pitcherStatsMap.get(game.teams?.away?.probablePitcher?.id),
-            weather
+            weather,
+            homeBullpen,
+            awayBullpen,
+            lineupData,
+            homePitcherForm,
+            awayPitcherForm
           );
           const analysis = analyzeGame(features);
 
@@ -460,6 +516,29 @@ export const mlbRouter = router({
               homeRunLine: features.runLine,
               homeRunLineOdds: (features as any).homeRunLineOdds,
               awayRunLineOdds: (features as any).awayRunLineOdds,
+            },
+            // Model upgrade signals (new)
+            modelSignals: {
+              homeBullpen: homeBullpen ? {
+                restScore: homeBullpen.restScore,
+                fatiguedCount: homeBullpen.fatiguedRelievers,
+                summary: homeBullpen.summary,
+              } : null,
+              awayBullpen: awayBullpen ? {
+                restScore: awayBullpen.restScore,
+                fatiguedCount: awayBullpen.fatiguedRelievers,
+                summary: awayBullpen.summary,
+              } : null,
+              lineupConfirmed: {
+                home: !!(lineupData?.home?.length),
+                away: !!(lineupData?.away?.length),
+              },
+              pitcherTrend: {
+                home: homePitcherForm?.trend || null,
+                homeLast3ERA: homePitcherForm?.last3ERA || null,
+                away: awayPitcherForm?.trend || null,
+                awayLast3ERA: awayPitcherForm?.last3ERA || null,
+              },
             },
             // Predictions with normalized picks
             predictions: {

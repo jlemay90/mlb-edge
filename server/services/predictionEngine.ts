@@ -110,6 +110,22 @@ export interface GameFeatures {
   umpireOverPct?: number;
   umpirePitcherFavorScore?: number;
 
+  // Bullpen
+  homeBullpenRestScore?: number;   // 0-100, higher = more rested
+  awayBullpenRestScore?: number;
+  homeBullpenFatiguedCount?: number;
+  awayBullpenFatiguedCount?: number;
+
+  // Confirmed Lineup
+  homeLineupConfirmed?: boolean;
+  awayLineupConfirmed?: boolean;
+  homeLineupCount?: number;  // number of confirmed batters
+  awayLineupCount?: number;
+
+  // Pitcher recent form trend (model upgrade 2)
+  homePitcherTrend?: "hot" | "cold" | "neutral";
+  awayPitcherTrend?: "hot" | "cold" | "neutral";
+
   // Odds
   homeMoneyLine?: number;
   awayMoneyLine?: number;
@@ -229,6 +245,23 @@ export function projectTeamRuns(features: GameFeatures, side: "home" | "away"): 
   if (features.umpireAvgRunsPerGame) {
     const umpAdj = (features.umpireAvgRunsPerGame - 9.1) / 2;
     runs += umpAdj * 0.3;
+  }
+
+  // Pitcher recent form trend (hot/cold streak adjustment)
+  const pitcherTrend = isHome ? features.homePitcherTrend : features.awayPitcherTrend;
+  const opposingTrend = isHome ? features.awayPitcherTrend : features.homePitcherTrend;
+  if (opposingTrend === "hot") runs -= 0.2;  // hot pitcher facing this team = fewer runs
+  if (opposingTrend === "cold") runs += 0.25; // cold pitcher = more runs allowed
+  // (pitcherTrend = own team's pitcher trend, not used for run scoring here)
+  void pitcherTrend; // suppress unused var warning
+
+  // Bullpen fatigue — fatigued bullpen gives up more runs in later innings
+  const bullpenRest = isHome ? features.homeBullpenRestScore : features.awayBullpenRestScore;
+  if (bullpenRest !== undefined) {
+    // Rest score 0-100: below 50 = fatigued, above 70 = rested
+    const bullpenAdj = (bullpenRest - 60) * 0.008; // max ~+0.32 / -0.48 runs
+    runs += bullpenAdj;
+    if (bullpenRest < 40) runs += 0.2; // extra penalty for severely fatigued bullpen
   }
 
   // Home field advantage (home teams score ~0.15 more runs per game)
@@ -431,8 +464,17 @@ export function predictTotal(features: GameFeatures): PredictionResult | null {
   const overProb = 1 / (1 + Math.exp(-1.7 * zScore));
   const underProb = 1 - overProb;
 
-  // Umpire over% adjustment
+  // Bullpen fatigue boosts totals (fatigued bullpens give up more runs)
   let adjustedOverProb = overProb;
+  const homeBullpenRest = features.homeBullpenRestScore;
+  const awayBullpenRest = features.awayBullpenRestScore;
+  if (homeBullpenRest !== undefined || awayBullpenRest !== undefined) {
+    const avgRest = ((homeBullpenRest ?? 70) + (awayBullpenRest ?? 70)) / 2;
+    if (avgRest < 50) adjustedOverProb += 0.04; // both bullpens fatigued = lean over
+    else if (avgRest > 75) adjustedOverProb -= 0.02; // both rested = slight lean under
+  }
+
+  // Umpire over% adjustment
   if (features.umpireOverPct) {
     const umpireAdj = (features.umpireOverPct / 100 - 0.5) * 0.15;
     adjustedOverProb += umpireAdj;
@@ -492,6 +534,8 @@ export function predictTotal(features: GameFeatures): PredictionResult | null {
       tempF: features.tempF || 72,
       windSpeed: features.windSpeedMph || 0,
       windDir: features.windDirLabel || "N/A",
+      homeBullpenRest: features.homeBullpenRestScore || "N/A",
+      awayBullpenRest: features.awayBullpenRestScore || "N/A",
     },
   };
 }
@@ -528,6 +572,13 @@ export interface PropInput {
   parkFactorHR?: number;
   weatherRunImpact?: number;
   tempF?: number;
+  // Batter vs Pitcher Statcast matchup
+  matchupPA?: number;          // plate appearances in matchup
+  matchupHRScore?: number;     // composite HR likelihood 0-1
+  matchupHardHitPct?: number;  // hard hit % in matchup
+  matchupXBA?: number;         // expected BA in matchup
+  // Handedness-split park factor
+  parkFactorHRHandedness?: number; // park factor adjusted for batter handedness
 }
 
 export function predictProp(input: PropInput): {
@@ -583,14 +634,30 @@ export function predictProp(input: PropInput): {
       projection += pitcherAdj;
     }
   } else if (input.propType === "batter_home_runs") {
-    // HR projection
+    // HR projection — base from season HR rate
     const hrRate = (input.batterHRPer600 || 20) / 600;
     const atBats = 3.8;
     projection = hrRate * atBats;
 
-    if (input.parkFactorHR) {
-      projection *= input.parkFactorHR / 100;
-      if (Math.abs(input.parkFactorHR - 100) > 5) keyFactors.push(`Park HR factor: ${input.parkFactorHR}`);
+    // Use handedness-adjusted park factor if available, else flat park factor
+    const effectiveParkHR = input.parkFactorHRHandedness ?? input.parkFactorHR;
+    if (effectiveParkHR) {
+      projection *= effectiveParkHR / 100;
+      if (Math.abs(effectiveParkHR - 100) > 5) keyFactors.push(`Park HR factor (handedness-adj): ${effectiveParkHR}`);
+    }
+
+    // Batter vs pitcher Statcast matchup boost
+    if (input.matchupPA && input.matchupPA >= 5) {
+      if (input.matchupHRScore !== undefined) {
+        const matchupAdj = (input.matchupHRScore - 0.15) * 0.04; // 0.15 = league avg HR score
+        projection += matchupAdj;
+        if (input.matchupHRScore > 0.25) keyFactors.push(`Strong matchup HR score: ${(input.matchupHRScore * 100).toFixed(0)}% (${input.matchupPA} PA)`);
+        else if (input.matchupHRScore < 0.08) keyFactors.push(`Weak matchup vs this pitcher (${input.matchupPA} PA)`);
+      }
+      if (input.matchupHardHitPct && input.matchupHardHitPct > 0.45) {
+        projection += 0.005;
+        keyFactors.push(`Hard-hit% vs pitcher: ${(input.matchupHardHitPct * 100).toFixed(0)}%`);
+      }
     }
 
     if (input.batterBarrelPct) {

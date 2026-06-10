@@ -431,3 +431,271 @@ export const ODDS_TEAM_MAP: Record<string, number> = {
   "Philadelphia Phillies": 143, "Atlanta Braves": 144, "Chicago White Sox": 145,
   "Miami Marlins": 146, "New York Yankees": 147, "Milwaukee Brewers": 158,
 };
+
+// ─── Model Upgrade: Confirmed Lineups ────────────────────────────────────────
+
+/**
+ * Fetch confirmed starting lineups for a game.
+ * Returns null if lineups haven't been posted yet (typically 2-3 hrs before first pitch).
+ */
+export async function fetchConfirmedLineups(gamePk: number): Promise<{
+  home: Array<{ id: number; name: string; position: string; battingOrder: number }>;
+  away: Array<{ id: number; name: string; position: string; battingOrder: number }>;
+} | null> {
+  try {
+    const res = await axios.get(`${MLB_API}/game/${gamePk}/boxscore`, { timeout: 8000 });
+    const home = res.data?.teams?.home?.battingOrder || [];
+    const away = res.data?.teams?.away?.battingOrder || [];
+    const homePlayers = res.data?.teams?.home?.players || {};
+    const awayPlayers = res.data?.teams?.away?.players || {};
+
+    if (!home.length && !away.length) return null; // Not posted yet
+
+    const mapPlayer = (id: number, players: any, order: number) => {
+      const p = players[`ID${id}`];
+      return {
+        id,
+        name: p?.person?.fullName || "Unknown",
+        position: p?.position?.abbreviation || "?",
+        battingOrder: order + 1,
+      };
+    };
+
+    return {
+      home: home.map((id: number, i: number) => mapPlayer(id, homePlayers, i)),
+      away: away.map((id: number, i: number) => mapPlayer(id, awayPlayers, i)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ─── Model Upgrade: Pitcher Recent Form (Last 3 Starts) ──────────────────────
+
+export interface PitcherRecentForm {
+  playerId: number;
+  name: string;
+  last3ERA: number;        // ERA over last 3 starts
+  last3WHIP: number;       // WHIP over last 3 starts
+  last3Ks: number;         // Total Ks in last 3 starts
+  last3IP: number;         // Total innings pitched
+  last3HR: number;         // HR allowed in last 3 starts
+  trend: "hot" | "cold" | "neutral"; // hot = ERA < 3.00, cold = ERA > 5.00
+  starts: Array<{ date: string; ip: number; er: number; k: number; hr: number }>;
+}
+
+export async function fetchPitcherRecentForm(playerId: number, name: string): Promise<PitcherRecentForm | null> {
+  try {
+    const res = await axios.get(`${MLB_API}/people/${playerId}/stats`, {
+      params: { stats: "gameLog", group: "pitching", season: new Date().getFullYear(), limit: 5 },
+      timeout: 8000,
+    });
+    const splits = res.data?.stats?.[0]?.splits?.slice(0, 3) || [];
+    if (!splits.length) return null;
+
+    let totalER = 0, totalIP = 0, totalKs = 0, totalHR = 0, totalHits = 0, totalBB = 0;
+    const starts = splits.map((s: any) => {
+      const ip = parseFloat(s.stat?.inningsPitched || "0");
+      const er = s.stat?.earnedRuns || 0;
+      const k = s.stat?.strikeOuts || 0;
+      const hr = s.stat?.homeRuns || 0;
+      totalER += er; totalIP += ip; totalKs += k; totalHR += hr;
+      totalHits += s.stat?.hits || 0; totalBB += s.stat?.baseOnBalls || 0;
+      return { date: s.date, ip, er, k, hr };
+    });
+
+    const last3ERA = totalIP > 0 ? parseFloat(((totalER * 9) / totalIP).toFixed(2)) : 0;
+    const last3WHIP = totalIP > 0 ? parseFloat(((totalHits + totalBB) / totalIP).toFixed(2)) : 0;
+
+    return {
+      playerId, name, last3ERA, last3WHIP, last3Ks: totalKs, last3IP: totalIP,
+      last3HR: totalHR,
+      trend: last3ERA < 3.0 ? "hot" : last3ERA > 5.0 ? "cold" : "neutral",
+      starts,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ─── Model Upgrade: Bullpen Usage & Rest ─────────────────────────────────────
+
+export interface BullpenStatus {
+  teamId: number;
+  totalPitchesLast3Days: number;
+  relieversUsedLast3Days: number;
+  avgPitchesPerReliever: number;
+  fatiguedRelievers: number; // count of relievers with 40+ pitches in last 3 days
+  restScore: number;         // 0-100, higher = more rested
+  summary: string;
+}
+
+export async function fetchBullpenStatus(teamId: number): Promise<BullpenStatus | null> {
+  try {
+    const res = await axios.get(`${MLB_API}/teams/${teamId}/roster`, {
+      params: {
+        rosterType: "active",
+        season: new Date().getFullYear(),
+        hydrate: `person(stats(type=gameLog,group=pitching,season=${new Date().getFullYear()},limit=4))`,
+      },
+      timeout: 10000,
+    });
+
+    const roster = res.data?.roster || [];
+    const relievers = roster.filter((p: any) =>
+      p.position?.abbreviation === "P" && p.status?.code !== "10D" && p.status?.code !== "60D"
+    );
+
+    const cutoff = new Date(Date.now() - 3 * 86400000).toISOString().split("T")[0];
+    let totalPitches = 0, usedCount = 0, fatiguedCount = 0;
+
+    for (const r of relievers) {
+      const recentGames = (r.person?.stats?.[0]?.splits || []).filter(
+        (s: any) => s.date >= cutoff
+      );
+      const pitches = recentGames.reduce((sum: number, g: any) => sum + (g.stat?.numberOfPitches || 0), 0);
+      if (pitches > 0) { usedCount++; totalPitches += pitches; }
+      if (pitches >= 40) fatiguedCount++;
+    }
+
+    const avgPitches = usedCount > 0 ? Math.round(totalPitches / usedCount) : 0;
+    // Rest score: 100 = fully rested, 0 = exhausted
+    const restScore = Math.max(0, Math.min(100, 100 - (totalPitches / Math.max(relievers.length, 1)) * 1.5));
+
+    return {
+      teamId, totalPitchesLast3Days: totalPitches, relieversUsedLast3Days: usedCount,
+      avgPitchesPerReliever: avgPitches, fatiguedRelievers: fatiguedCount,
+      restScore: Math.round(restScore),
+      summary: fatiguedCount >= 2
+        ? `Bullpen fatigued (${fatiguedCount} relievers 40+ pitches in 3 days)`
+        : restScore >= 70
+        ? "Bullpen well-rested"
+        : "Bullpen moderately used",
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ─── Model Upgrade: Batter vs Pitcher Statcast Matchups ──────────────────────
+
+export interface BatterMatchup {
+  batterId: number;
+  pitcherId: number;
+  pa: number;           // plate appearances
+  avg: number;          // batting average
+  slg: number;          // slugging
+  hr: number;           // home runs
+  kPct: number;         // strikeout %
+  bbPct: number;        // walk %
+  hardHitPct: number;   // hard hit %
+  xba: number;          // expected batting average
+  hrScore: number;      // composite HR likelihood score 0-1
+}
+
+export async function fetchBatterMatchup(batterId: number, pitcherId: number): Promise<BatterMatchup | null> {
+  try {
+    const url = `${SAVANT_API}/statcast_search/csv?hitter_id=${batterId}&pitcher_id=${pitcherId}&type=batter&year=${new Date().getFullYear()}`;
+    const res = await axios.get(url, { timeout: 8000, responseType: "text" });
+    const lines = (res.data as string).split("\n").filter(Boolean);
+    if (lines.length < 2) return null; // No matchup data
+
+    const headers = lines[0].split(",").map((h: string) => h.replace(/"/g, "").trim());
+    const rows = lines.slice(1).map((line: string) => {
+      const vals = line.split(",").map((v: string) => v.replace(/"/g, "").trim());
+      const obj: Record<string, string> = {};
+      headers.forEach((h: string, i: number) => { obj[h] = vals[i] || ""; });
+      return obj;
+    });
+
+    const pa = rows.length;
+    const hits = rows.filter(r => ["single", "double", "triple", "home_run"].includes(r.events)).length;
+    const hrs = rows.filter(r => r.events === "home_run").length;
+    const ks = rows.filter(r => r.events === "strikeout" || r.events === "strikeout_double_play").length;
+    const bbs = rows.filter(r => r.events === "walk").length;
+    const hardHit = rows.filter(r => parseFloat(r.launch_speed || "0") >= 95).length;
+    const xbaVals = rows.map(r => parseFloat(r.estimated_ba_using_speedangle || "0")).filter(v => v > 0);
+    const xba = xbaVals.length > 0 ? xbaVals.reduce((a, b) => a + b, 0) / xbaVals.length : 0;
+
+    const totalBases = rows.reduce((sum, r) => {
+      if (r.events === "single") return sum + 1;
+      if (r.events === "double") return sum + 2;
+      if (r.events === "triple") return sum + 3;
+      if (r.events === "home_run") return sum + 4;
+      return sum;
+    }, 0);
+
+    const avg = pa > 0 ? hits / pa : 0;
+    const slg = pa > 0 ? totalBases / pa : 0;
+    const kPct = pa > 0 ? ks / pa : 0;
+    const bbPct = pa > 0 ? bbs / pa : 0;
+    const hardHitPct = pa > 0 ? hardHit / pa : 0;
+
+    // HR score: weighted composite of HR rate, hard hit %, xBA, SLG
+    const hrRate = pa >= 5 ? hrs / pa : 0;
+    const hrScore = Math.min(1, hrRate * 3 + hardHitPct * 0.5 + slg * 0.2 + xba * 0.3);
+
+    return { batterId, pitcherId, pa, avg, slg, hr: hrs, kPct, bbPct, hardHitPct, xba, hrScore };
+  } catch {
+    return null;
+  }
+}
+
+// ─── Model Upgrade: Handedness-Split Park Factors ────────────────────────────
+
+// Park factor multipliers by batter handedness (L/R) for HR probability
+// Source: FanGraphs park factors, 3-year average splits
+export const PARK_FACTOR_SPLITS: Record<number, { hrL: number; hrR: number; runsL: number; runsR: number }> = {
+  108: { hrL: 96,  hrR: 98,  runsL: 97,  runsR: 99  }, // Angel Stadium
+  109: { hrL: 110, hrR: 104, runsL: 106, runsR: 103 }, // Chase Field
+  110: { hrL: 105, hrR: 101, runsL: 102, runsR: 100 }, // Camden Yards
+  111: { hrL: 95,  hrR: 108, runsL: 102, runsR: 106 }, // Fenway Park (Green Monster favors RHB)
+  112: { hrL: 108, hrR: 104, runsL: 105, runsR: 102 }, // Wrigley Field
+  113: { hrL: 115, hrR: 110, runsL: 108, runsR: 105 }, // GABP
+  114: { hrL: 94,  hrR: 98,  runsL: 97,  runsR: 99  }, // Progressive Field
+  115: { hrL: 122, hrR: 118, runsL: 116, runsR: 114 }, // Coors Field
+  116: { hrL: 90,  hrR: 94,  runsL: 95,  runsR: 97  }, // Comerica Park
+  117: { hrL: 102, hrR: 100, runsL: 101, runsR: 100 }, // Minute Maid Park
+  118: { hrL: 93,  hrR: 97,  runsL: 96,  runsR: 98  }, // Kauffman Stadium
+  119: { hrL: 94,  hrR: 98,  runsL: 96,  runsR: 98  }, // Dodger Stadium
+  120: { hrL: 99,  hrR: 101, runsL: 99,  runsR: 100 }, // Nationals Park
+  121: { hrL: 90,  hrR: 96,  runsL: 94,  runsR: 97  }, // Citi Field
+  133: { hrL: 86,  hrR: 90,  runsL: 93,  runsR: 96  }, // Oakland Coliseum
+  134: { hrL: 94,  hrR: 98,  runsL: 96,  runsR: 98  }, // PNC Park
+  135: { hrL: 84,  hrR: 88,  runsL: 90,  runsR: 92  }, // Petco Park
+  136: { hrL: 92,  hrR: 96,  runsL: 95,  runsR: 97  }, // T-Mobile Park
+  137: { hrL: 78,  hrR: 82,  runsL: 87,  runsR: 89  }, // Oracle Park (pitcher's park)
+  138: { hrL: 97,  hrR: 99,  runsL: 98,  runsR: 100 }, // Busch Stadium
+  139: { hrL: 94,  hrR: 96,  runsL: 96,  runsR: 98  }, // Tropicana Field
+  140: { hrL: 107, hrR: 103, runsL: 103, runsR: 101 }, // Globe Life Field
+  141: { hrL: 110, hrR: 106, runsL: 105, runsR: 103 }, // Rogers Centre
+  142: { hrL: 97,  hrR: 101, runsL: 99,  runsR: 101 }, // Target Field
+  143: { hrL: 112, hrR: 108, runsL: 106, runsR: 104 }, // Citizens Bank Park
+  144: { hrL: 101, hrR: 105, runsL: 100, runsR: 102 }, // Truist Park
+  145: { hrL: 100, hrR: 104, runsL: 99,  runsR: 101 }, // Guaranteed Rate Field
+  146: { hrL: 87,  hrR: 91,  runsL: 91,  runsR: 93  }, // loanDepot park
+  147: { hrL: 106, hrR: 110, runsL: 103, runsR: 104 }, // Yankee Stadium (short RF porch)
+  158: { hrL: 102, hrR: 106, runsL: 100, runsR: 102 }, // American Family Field
+};
+
+/**
+ * Get park factor for a specific batter handedness.
+ * Returns the standard park factor if handedness splits aren't available.
+ */
+export function getParkFactorForHandedness(
+  teamId: number,
+  batterHand: "L" | "R" | "S" | null
+): { hr: number; runs: number } {
+  const splits = PARK_FACTOR_SPLITS[teamId];
+  if (!splits) {
+    const base = STADIUM_DATA[teamId];
+    return { hr: base?.parkFactorHR ?? 100, runs: base?.parkFactorRuns ?? 100 };
+  }
+  if (batterHand === "L") return { hr: splits.hrL, runs: splits.runsL };
+  if (batterHand === "R") return { hr: splits.hrR, runs: splits.runsR };
+  // Switch hitter or unknown: average of L and R
+  return {
+    hr: Math.round((splits.hrL + splits.hrR) / 2),
+    runs: Math.round((splits.runsL + splits.runsR) / 2),
+  };
+}
