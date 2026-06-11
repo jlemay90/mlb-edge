@@ -186,3 +186,10 @@
 - [x] Landing page: 'Free Pick' added to footer nav
 - [x] No changes to Stripe pricing, subscription tiers, or paywall logic
 - [x] 36/36 tests passing, TypeScript clean
+
+## Line Movement Snapshot — 30-min Auto-Polling
+- [x] Build /api/scheduled/snapshot-odds handler (3 credits/run, h2h+spreads+totals only, DK preferred)
+- [x] Mount handler in server/_core/index.ts
+- [x] TypeScript clean, 36/36 tests passing
+- [ ] Deploy site, then register heartbeat cron: every 30 min, noon-midnight ET (16:00-04:00 UTC)
+- [ ] Verify snapshots accumulating in DB after first few runs

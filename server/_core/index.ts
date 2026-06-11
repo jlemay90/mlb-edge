@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerStripeWebhook } from "../stripe/webhookHandler";
 import { scheduledRefreshHandler } from "../scheduled/refreshHandler";
+import { snapshotOddsHandler } from "../scheduled/snapshotOddsHandler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -51,6 +52,7 @@ async function startServer() {
   // Scheduled (Heartbeat) endpoints — must be registered before the Vite/static
   // fallthrough. /api/scheduled/* is not auto-registered.
   app.post("/api/scheduled/refresh", scheduledRefreshHandler);
+  app.post("/api/scheduled/snapshot-odds", snapshotOddsHandler);
 
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
