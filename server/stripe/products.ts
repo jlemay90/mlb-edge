@@ -1,124 +1,133 @@
 // MLB Edge — Stripe Product & Price Configuration
-// LIVE mode prices (created 2026-06-04/05)
-// Products: prod_Ue6sfnk59m7R8N (Pro), prod_Ue6sAEo82YWmBo (Sharp)
 //
-// Pricing model:
-//   Pro:   $9.99 first month → $29/mo ongoing
-//   Sharp: 3-day FREE trial   → $30 first month → $24.99/mo ongoing  (Limited time)
-//   Annual promos remain unchanged
+// Relaunch pricing (2026-06). Internal tier KEYS are kept stable to avoid a
+// large refactor of every feature gate:
+//   internal "pro"       -> displayed as "Edge"      $9.99/mo  ($99/yr)
+//   internal "sharp"     -> displayed as "Sharp"     $19.99/mo ($199/yr)
+//   internal "syndicate" -> displayed as "Syndicate" $49.99/mo ($499/yr)  [NEW]
+//
+// Prices are resolved at runtime by stable lookup_key (see resolvePriceId in
+// stripeRouter.ts), so the SAME code works in test (sandbox) and live
+// (production) once `node scripts/create-prices.mjs` has been run in each mode.
+//
+// Founding-500: the first 500 paying members lock THEIR OWN tier's rate for
+// life. We never change a founder's price; new prices only affect new joiners
+// after the relaunch rates eventually rise.
 
-export type SubscriptionTier = "free" | "pro" | "sharp";
+export type SubscriptionTier = "free" | "pro" | "sharp" | "syndicate";
+
+export const FOUNDING_MEMBER_CAP = 500;
 
 export interface TierConfig {
-  name: string;
-  tier: SubscriptionTier;
-  monthlyPriceId: string;       // ongoing monthly price
-  annualPriceId: string;
-  introMonthlyPriceId?: string; // first-month intro price (after trial)
-  trialDays?: number;           // trial length in days
-  trialPrice?: number;          // cost of trial in cents (0 = free)
-  monthlyPrice: number;         // ongoing monthly price in cents
-  monthlyRegPrice?: number;     // regular monthly (shown crossed out)
-  introMonthlyPrice?: number;   // first-month price in cents
-  annualPrice: number;
-  annualRegPrice?: number;
-  annualSavings?: number;
+  name: string;            // user-facing label
+  tier: SubscriptionTier;  // internal key
+  monthlyLookupKey: string;
+  annualLookupKey: string;
+  monthlyPrice: number;    // cents
+  annualPrice: number;     // cents
+  annualSavingsLabel?: string;
   description: string;
   features: string[];
   badge?: string;
-  limitedTime?: boolean;        // show "Limited time only" badge
+  highlight?: boolean;     // visually emphasized column
 }
 
 export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
   free: {
     name: "Free",
     tier: "free",
-    monthlyPriceId: "",
-    annualPriceId: "",
+    monthlyLookupKey: "",
+    annualLookupKey: "",
     monthlyPrice: 0,
     annualPrice: 0,
-    description: "Teaser access — upgrade to unlock everything",
+    description: "One free pick a day — no card required",
     features: [
-      "Today's top pick (title only, no analysis)",
-      "Basic game schedule",
-      "Team standings (no stats)",
+      "Today's single best pick with full reasoning",
+      "Last 14-day public win/loss record",
+      "Daily game schedule",
     ],
   },
   pro: {
-    name: "Pro",
+    name: "Edge",
     tier: "pro",
-    monthlyPriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID || "price_1TermVANxPVrfK4rVtxXOcVH",
-    annualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || "price_1TermWANxPVrfK4r4ePKEkok",
-    introMonthlyPriceId: process.env.STRIPE_PRO_INTRO_PRICE_ID || "price_1TesF6ANxPVrfK4rjxvcl722",
-    trialDays: 0,
-    trialPrice: 0,
-    introMonthlyPrice: 999,     // $9.99 first month
-    monthlyPrice: 2900,         // $29/mo ongoing
-    monthlyRegPrice: 2900,
-    annualPrice: 17500,         // $175/yr promo
-    annualRegPrice: 34800,      // $348/yr regular
-    annualSavings: 17300,
-    description: "Full access for serious bettors",
-    badge: "Most Popular",
+    monthlyLookupKey: "mlbedge_edge_monthly",
+    annualLookupKey: "mlbedge_edge_annual",
+    monthlyPrice: 999, // $9.99
+    annualPrice: 9900, // $99/yr (~2 months free)
+    annualSavingsLabel: "2 months free",
+    description: "Every pick, every day — the core edge",
+    badge: "Best Value",
     features: [
       "All picks — money line, run line, totals",
-      "Full player props (HR, K, hits, RBI, SB)",
-      "Live line movement tracking",
-      "Game detail with umpire + weather analysis",
+      "Full edge % and model reasoning on every pick",
+      "Player props (HR, K, hits, RBI, SB)",
+      "Live odds from DraftKings + FanDuel",
+      "Game detail with umpire + weather + park factors",
       "Team Stats Explorer (all 30 teams)",
-      "Analytics & backtesting dashboard",
-      "Real-time odds from 10+ books",
-      "Email alerts for A-grade picks",
     ],
   },
   sharp: {
     name: "Sharp",
     tier: "sharp",
-    monthlyPriceId: process.env.STRIPE_SHARP_MONTHLY_PRICE_ID || "price_1TesRfANxPVrfK4rXIrXg57u",
-    annualPriceId: process.env.STRIPE_SHARP_ANNUAL_PRICE_ID || "price_1TermXANxPVrfK4rGW0YyKmC",
-    introMonthlyPriceId: process.env.STRIPE_SHARP_INTRO_PRICE_ID || "price_1TesHeANxPVrfK4rOY5i4ZQq",
-    trialDays: 3,
-    trialPrice: 0,              // FREE 3-day trial
-    introMonthlyPrice: 3000,    // $30 first full month
-    monthlyPrice: 2499,         // $24.99/mo ongoing
-    monthlyRegPrice: 7900,        // crossed-out reg price
-    annualPrice: 50000,         // $500/yr promo
-    annualRegPrice: 94800,      // $948/yr regular
-    annualSavings: 44800,
-    description: "Professional-grade edge hunting",
-    badge: "For Serious Players",
-    limitedTime: true,
+    monthlyLookupKey: "mlbedge_sharp_monthly",
+    annualLookupKey: "mlbedge_sharp_annual",
+    monthlyPrice: 1999, // $19.99
+    annualPrice: 19900, // $199/yr (~2 months free)
+    annualSavingsLabel: "2 months free",
+    description: "Parlays + props built by the model",
+    badge: "Most Popular",
+    highlight: true,
     features: [
-      "Everything in Pro",
-      "Parlay builder with correlated picks",
-      "Moonshot HR prop analysis (Statcast 420ft+)",
-      "Steam move alerts (sharp money signals)",
-      "Reverse line movement notifications",
-      "Model confidence scores + feature weights",
-      "Historical backtesting (50+ years via Retrosheet)",
-      "Priority support + Discord access",
+      "Everything in Edge",
+      "5 daily parlays (Power, Value, Lotto, High-Value, HR Prop)",
+      "Per-leg reasoning + post-game debriefs",
+      "Moonshot HR prop analysis (Statcast-driven)",
+      "Line movement + steam / reverse-line alerts",
+      "Self-grading W/L history on every parlay",
+    ],
+  },
+  syndicate: {
+    name: "Syndicate",
+    tier: "syndicate",
+    monthlyLookupKey: "mlbedge_syndicate_monthly",
+    annualLookupKey: "mlbedge_syndicate_annual",
+    monthlyPrice: 4999, // $49.99
+    annualPrice: 49900, // $499/yr (~2 months free)
+    annualSavingsLabel: "2 months free",
+    description: "Everything in Sharp, plus the raw model and bankroll tools",
+    badge: "Inner Circle",
+    features: [
+      "Everything in Sharp",
+      "Full model-confidence view — raw edge % on every leg",
+      "Bankroll & bet tracker (log bets, track live ROI)",
+      "Priority support",
     ],
   },
 };
 
-// Feature gates — which features require which tier
-// Free tier is now a teaser only — almost everything requires Pro+
+// Feature gates — which features require which tier (by rank).
 export const TIER_GATES = {
   allPicks: "pro" as SubscriptionTier,
-  pickAnalysis: "pro" as SubscriptionTier,   // rationale/analysis text
-  pickOdds: "pro" as SubscriptionTier,        // odds/lines on picks
+  pickAnalysis: "pro" as SubscriptionTier,
+  pickOdds: "pro" as SubscriptionTier,
   playerProps: "pro" as SubscriptionTier,
   lineMovement: "pro" as SubscriptionTier,
   gameDetail: "pro" as SubscriptionTier,
-  teamStats: "pro" as SubscriptionTier,       // was free, now pro
-  analytics: "pro" as SubscriptionTier,       // was free, now pro
+  teamStats: "pro" as SubscriptionTier,
+  analytics: "pro" as SubscriptionTier,
   parlayBuilder: "sharp" as SubscriptionTier,
   moonshotProps: "sharp" as SubscriptionTier,
   steamAlerts: "sharp" as SubscriptionTier,
+  // Syndicate-only
+  bankrollTracker: "syndicate" as SubscriptionTier,
+  rawEdge: "syndicate" as SubscriptionTier,
+  earlyAccess: "syndicate" as SubscriptionTier,
 };
 
+const RANK: Record<SubscriptionTier, number> = { free: 0, pro: 1, sharp: 2, syndicate: 3 };
+
 export function tierRank(tier: SubscriptionTier): number {
-  return { free: 0, pro: 1, sharp: 2 }[tier];
+  return RANK[tier] ?? 0;
 }
 
 export function hasAccess(userTier: SubscriptionTier, requiredTier: SubscriptionTier): boolean {

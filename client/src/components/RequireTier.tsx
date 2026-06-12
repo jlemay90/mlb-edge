@@ -2,10 +2,10 @@ import { ReactNode } from "react";
 import { useAccount, Tier } from "@/hooks/useAccount";
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
-import { Lock, Zap, Crown } from "lucide-react";
+import { Lock, Zap, Crown, Star } from "lucide-react";
 import { useLocation } from "wouter";
 
-const TIER_LABEL: Record<Tier, string> = { free: "Free", pro: "Pro", sharp: "Sharp" };
+const TIER_LABEL: Record<Tier, string> = { free: "Free", pro: "Edge", sharp: "Sharp", syndicate: "Syndicate" };
 
 /**
  * Gate that blurs/locks its children unless the user meets the required tier.
@@ -28,7 +28,7 @@ export function RequireTier({
   if (loading) return <>{children}</>;
   if (hasTier(tier)) return <>{children}</>;
 
-  const Icon = tier === "sharp" ? Crown : Zap;
+  const Icon = tier === "syndicate" ? Star : tier === "sharp" ? Crown : Zap;
 
   return (
     <div className="relative">
@@ -59,11 +59,11 @@ export function RequireTier({
           ) : (
             <>
               <p className="text-muted-foreground mt-2 text-sm">
-                Start your free trial to unlock the full MLB Edge model — picks, props, and parlays.
+                Sign in, then unlock the full MLB Edge model — picks, props, and parlays.
               </p>
               <div className="mt-5 flex items-center justify-center gap-3">
                 <Button className="gap-2" onClick={() => (window.location.href = getLoginUrl())}>
-                  Start free trial
+                  Sign in
                 </Button>
                 <Button variant="outline" onClick={() => navigate("/pricing")}>
                   View pricing

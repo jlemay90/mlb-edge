@@ -76,8 +76,8 @@ const FEATURES = [
   },
   {
     icon: BarChart3,
-    title: "Backtested Analytics",
-    description: "2024 season results: 62.4% win rate on A-grade picks, +19.2% ROI on 1-unit flat betting.",
+    title: "Self-Grading Track Record",
+    description: "Every parlay is auto-graded win/loss after games settle. Our live record is shown publicly — no cherry-picking.",
     color: "text-yellow-400",
   },
   {
@@ -94,23 +94,6 @@ const FEATURES = [
   },
 ];
 
-const TESTIMONIALS = [
-  {
-    text: "Finally a tool that actually explains WHY it likes a pick. The umpire and weather data alone is worth it.",
-    author: "Sharp bettor, 3+ years",
-    stars: 5,
-  },
-  {
-    text: "Hit 7 of my last 10 A-grade picks using this. The edge scores are legit.",
-    author: "Pro subscriber",
-    stars: 5,
-  },
-  {
-    text: "The line movement tracker caught a steam move on a Cubs game 2 hours before it moved 15 points. Cashed.",
-    author: "Sharp subscriber",
-    stars: 5,
-  },
-];
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -126,6 +109,11 @@ export default function LandingPage() {
     { days: 14 },
     { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 }
   );
+
+  const { data: founding } = trpc.stripe.getFoundingStatus.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+    staleTime: 60 * 1000,
+  });
 
   const pick = pickQuery.data;
   const record = recordQuery.data;
@@ -196,7 +184,7 @@ export default function LandingPage() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Free pick daily — no account needed. Pro from $9.99. Sharp: 3-day free trial.
+                One free pick daily — no account needed. Edge $9.99/mo · Sharp $19.99/mo · Syndicate $49.99/mo.
               </p>
             </div>
 
@@ -329,9 +317,17 @@ export default function LandingPage() {
       <section className="border-y border-border bg-muted/20">
         <div className="max-w-6xl mx-auto px-4 py-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
-            <StatCard value="62.4%" label="2024 Win Rate" sub="A-grade picks" />
-            <StatCard value="+19.2%" label="2024 ROI" sub="1-unit flat bet" />
-            <StatCard value="2,430" label="Games Analyzed" sub="Full 2024 season" />
+            <StatCard
+              value={record && record.totalGraded > 0 ? `${record.wins}–${record.losses}` : "—"}
+              label="Live Record"
+              sub="Last 14 days (graded)"
+            />
+            <StatCard
+              value={record && record.winPct != null ? `${record.winPct}%` : "—"}
+              label="Win Rate"
+              sub="Recent graded parlays"
+            />
+            <StatCard value="5" label="Daily Parlays" sub="Built by the model" />
             <StatCard value="25+" label="Features Per Game" sub="ML model inputs" />
           </div>
         </div>
@@ -388,22 +384,25 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Testimonials */}
+      {/* Why trust the model (factual, no fabricated reviews) */}
       <section className="max-w-6xl mx-auto px-4 py-16 space-y-10">
         <div className="text-center space-y-3">
-          <h2 className="text-3xl font-bold text-foreground">What Bettors Are Saying</h2>
+          <h2 className="text-3xl font-bold text-foreground">Built on Data, Graded in Public</h2>
+          <p className="text-muted-foreground max-w-xl mx-auto">
+            No hype, no fake reviews. Every pick shows its reasoning, and every parlay is
+            auto-graded after the games settle so you can see the real record.
+          </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {TESTIMONIALS.map((t, i) => (
-            <Card key={i} className="bg-card border-border">
-              <CardContent className="p-5 space-y-3">
-                <div className="flex gap-0.5">
-                  {Array.from({ length: t.stars }).map((_, j) => (
-                    <Star key={j} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                  ))}
-                </div>
-                <p className="text-sm text-foreground leading-relaxed">"{t.text}"</p>
-                <p className="text-xs text-muted-foreground">— {t.author}</p>
+          {[
+            { title: "Transparent reasoning", body: "Each pick lists the exact factors — matchup, park, weather, umpire, recent form — behind it." },
+            { title: "Self-grading record", body: "Wins and losses are tallied automatically. Postponed games are voided, never counted as wins." },
+            { title: "No fabricated stats", body: "Model-derived numbers are labeled as estimates. We never present a guess as a confirmed reading." },
+          ].map((c) => (
+            <Card key={c.title} className="bg-card border-border">
+              <CardContent className="p-5 space-y-2">
+                <h3 className="font-bold text-foreground">{c.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{c.body}</p>
               </CardContent>
             </Card>
           ))}
@@ -415,31 +414,45 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto px-4 py-16 space-y-8">
           <div className="text-center space-y-3">
             <h2 className="text-3xl font-bold text-foreground">Simple, Transparent Pricing</h2>
-            <p className="text-muted-foreground">Try it first. Upgrade when you're winning.</p>
+            <p className="text-muted-foreground">
+              Start free. Founding members lock their rate for life.
+              {founding && founding.remaining > 0 ? ` ${founding.remaining} of ${founding.cap} founding spots left.` : ""}
+            </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
             {[
               {
-                name: "Pro",
+                name: "Edge",
                 price: "$9.99",
-                priceSub: "first month",
-                promoNote: "Then $29/mo after — cancel anytime",
-                annualPromo: "or $175/yr (save $173 first year)",
+                priceSub: "/mo",
+                promoNote: "or $99/yr (~2 months free)",
+                annualPromo: "",
                 features: ["All picks (ML/RL/O-U)", "Player props", "Line movement", "Full game analysis"],
-                cta: "Start Pro — $9.99",
+                cta: "Get Edge",
+                highlight: false,
+                badge: "Best Value",
+              },
+              {
+                name: "Sharp",
+                price: "$19.99",
+                priceSub: "/mo",
+                promoNote: "or $199/yr (~2 months free)",
+                annualPromo: "",
+                features: ["Everything in Edge", "5 daily parlays", "Moonshot HR props", "Steam alerts"],
+                cta: "Get Sharp",
                 highlight: true,
                 badge: "Most Popular",
               },
               {
-                name: "Sharp",
-                price: "FREE",
-                priceSub: "3-day trial",
-                promoNote: "Then $30 first month — $24.99/mo after",
-                annualPromo: "or $500/yr (save $448 first year)",
-                features: ["Everything in Pro", "Parlay builder", "Moonshot HR props", "Steam alerts"],
-                cta: "Start Sharp Trial — Free",
+                name: "Syndicate",
+                price: "$49.99",
+                priceSub: "/mo",
+                promoNote: "or $499/yr (~2 months free)",
+                annualPromo: "",
+                features: ["Everything in Sharp", "Raw edge % on every leg", "Bankroll tracker (live ROI)", "Priority support"],
+                cta: "Get Syndicate",
                 highlight: false,
-                badge: "⚡ Limited Time Only",
+                badge: "Inner Circle",
               },
             ].map((tier) => (
               <Card
@@ -458,8 +471,7 @@ export default function LandingPage() {
                       <span className="text-2xl font-extrabold text-foreground">{tier.price}</span>
                       <span className="text-sm text-muted-foreground">{tier.priceSub}</span>
                     </div>
-                    <p className="text-xs text-yellow-400/80 mt-1">{tier.promoNote}</p>
-                    <p className="text-xs text-green-400/80 mt-0.5">{tier.annualPromo}</p>
+                    <p className="text-xs text-green-400/80 mt-1">{tier.promoNote}</p>
                   </div>
                   <ul className="space-y-1.5">
                     {tier.features.map((f) => (
@@ -490,7 +502,7 @@ export default function LandingPage() {
         </h2>
         <p className="text-muted-foreground max-w-lg mx-auto">
           Start with today's free pick — no account needed. When you're ready for all 5 daily parlays,
-          upgrade to Pro or Sharp.
+          upgrade to Sharp or Syndicate.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Button size="lg" onClick={() => setLocation("/free-pick")} className="gap-2 text-base px-8">

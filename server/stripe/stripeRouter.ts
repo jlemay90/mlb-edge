@@ -1,15 +1,42 @@
 import { z } from "zod";
 import Stripe from "stripe";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
-import { getDb } from "../db";
+import {
+  getDb,
+  getFoundingMemberCount,
+  getFoundingSpotsRemaining,
+  ensureReferralCode,
+} from "../db";
 import { users } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
-import { STRIPE_PRODUCTS, type SubscriptionTier } from "./products";
+import { STRIPE_PRODUCTS, FOUNDING_MEMBER_CAP, type SubscriptionTier } from "./products";
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error("STRIPE_SECRET_KEY not configured");
   return new Stripe(key, { apiVersion: "2026-05-27.dahlia" });
+}
+
+// ── Price resolution by lookup_key ──────────────────────────────────────────
+// Prices are created by scripts/create-prices.mjs with stable lookup_keys so
+// the SAME code resolves the correct price in test (sandbox) and live (prod).
+// We cache resolved IDs in-process to avoid an API call on every checkout.
+const _priceCache = new Map<string, string>();
+
+async function resolvePriceId(stripe: Stripe, lookupKey: string): Promise<string> {
+  if (!lookupKey) throw new Error("Missing lookup_key for tier");
+  const cached = _priceCache.get(lookupKey);
+  if (cached) return cached;
+  const res = await stripe.prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 });
+  const price = res.data[0];
+  if (!price) {
+    throw new Error(
+      `No active Stripe price found for lookup_key "${lookupKey}". ` +
+        `Run "node scripts/create-prices.mjs" with the current Stripe key to create it.`
+    );
+  }
+  _priceCache.set(lookupKey, price.id);
+  return price.id;
 }
 
 export const stripeRouter = router({
@@ -26,59 +53,47 @@ export const stripeRouter = router({
     const customerId = (user as any).stripeCustomerId || null;
     const subscriptionId = (user as any).stripeSubscriptionId || null;
     const currentPeriodEnd = (user as any).subscriptionPeriodEnd || null;
+    const isFoundingMember = Boolean((user as any).isFoundingMember);
+    const foundingMemberNumber = (user as any).foundingMemberNumber || null;
 
-    return { tier, status, customerId, subscriptionId, currentPeriodEnd };
+    return {
+      tier,
+      status,
+      customerId,
+      subscriptionId,
+      currentPeriodEnd,
+      isFoundingMember,
+      foundingMemberNumber,
+    };
   }),
 
-  // Create a Stripe Checkout session for a subscription
+  // Create a Stripe Checkout session for a subscription.
+  // No trials, no intro pricing — clean recurring subscription at the listed rate.
   createCheckout: protectedProcedure
     .input(
       z.object({
-        tier: z.enum(["pro", "sharp"]),
+        tier: z.enum(["pro", "sharp", "syndicate"]),
         billing: z.enum(["monthly", "annual"]).default("monthly"),
         origin: z.string(),
-        trialDays: z.number().int().min(0).max(30).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const stripe = getStripe();
       const tierConfig = STRIPE_PRODUCTS[input.tier];
-
-      // ── Trial + intro pricing model ─────────────────────────────────────────
-      // Pro:   $5 upfront for 7-day trial → intro month price ($10) → regular ($29)
-      // Sharp: FREE 3-day trial → intro month price ($40) → regular ($79)
-      // Annual: skip trial, use annual priceId directly
       const isAnnual = input.billing === "annual";
-      const trialDays = input.trialDays ?? (isAnnual ? 0 : (tierConfig.trialDays ?? 7));
-      const trialPrice = tierConfig.trialPrice ?? 0; // cents; 0 = free trial
 
-      // Use intro monthly price for first month after trial (monthly only)
-      const priceId = isAnnual
-        ? tierConfig.annualPriceId
-        : (tierConfig.introMonthlyPriceId || tierConfig.monthlyPriceId);
+      const lookupKey = isAnnual ? tierConfig.annualLookupKey : tierConfig.monthlyLookupKey;
+      const priceId = await resolvePriceId(stripe, lookupKey);
 
-      const priceData = priceId
-        ? { price: priceId }
-        : {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: `MLB Edge ${tierConfig.name}`,
-                description: tierConfig.description,
-                metadata: { tier: input.tier },
-              },
-              unit_amount: isAnnual ? tierConfig.annualPrice : (tierConfig.introMonthlyPrice ?? tierConfig.monthlyPrice),
-              recurring: {
-                interval: isAnnual ? ("year" as const) : ("month" as const),
-              },
-            },
-          };
+      // Founding status is informational at checkout time; it is officially
+      // claimed in the webhook once payment succeeds. We pass intent through
+      // metadata so the webhook can lock the rate.
+      const spotsRemaining = await getFoundingSpotsRemaining();
+      const foundingEligible = spotsRemaining > 0;
 
-      // Build trial settings
-      // For paid trials ($5 Pro), Stripe uses add_invoice_items to charge upfront
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: "subscription",
-        line_items: [{ ...priceData, quantity: 1 }],
+        line_items: [{ price: priceId, quantity: 1 }],
         customer_email: ctx.user.email || undefined,
         client_reference_id: ctx.user.id.toString(),
         metadata: {
@@ -87,6 +102,14 @@ export const stripeRouter = router({
           customer_name: ctx.user.name || "",
           tier: input.tier,
           billing: input.billing,
+          founding_eligible: foundingEligible ? "1" : "0",
+        },
+        subscription_data: {
+          metadata: {
+            user_id: ctx.user.id.toString(),
+            tier: input.tier,
+            founding_eligible: foundingEligible ? "1" : "0",
+          },
         },
         allow_promotion_codes: true,
         success_url: `${input.origin}/billing?success=1&tier=${input.tier}`,
@@ -94,47 +117,7 @@ export const stripeRouter = router({
         payment_method_collection: "always",
       };
 
-      if (!isAnnual && trialDays > 0) {
-        sessionParams.subscription_data = {
-          trial_period_days: trialDays,
-          trial_settings: {
-            end_behavior: { missing_payment_method: "cancel" },
-          },
-          metadata: {
-            user_id: ctx.user.id.toString(),
-            tier: input.tier,
-          },
-        };
-        // For paid trials ($5 Pro): add a one-time line item for the trial fee.
-        // The subscription itself is free during the trial; the $5 is charged immediately
-        // as a separate add_invoice_items entry on the first invoice.
-        if (trialPrice > 0) {
-          sessionParams.line_items = [
-            { ...priceData, quantity: 1 },
-            {
-              price_data: {
-                currency: "usd",
-                product_data: {
-                  name: `MLB Edge ${tierConfig.name} — 7-Day Trial Fee`,
-                  description: "One-time fee for 7-day trial access. Full billing begins after trial.",
-                },
-                unit_amount: trialPrice,
-              },
-              quantity: 1,
-            },
-          ];
-        }
-      } else if (!isAnnual) {
-        sessionParams.subscription_data = {
-          metadata: {
-            user_id: ctx.user.id.toString(),
-            tier: input.tier,
-          },
-        };
-      }
-
       const session = await stripe.checkout.sessions.create(sessionParams);
-
       return { url: session.url };
     }),
 
@@ -158,15 +141,36 @@ export const stripeRouter = router({
       return { url: session.url };
     }),
 
-  // Get available pricing tiers (public)
+  // Get available pricing tiers (public). Never exposes internal lookup keys.
   getPricing: publicProcedure.query(() => {
     return Object.values(STRIPE_PRODUCTS).map((tier) => ({
-      ...tier,
-      // Don't expose internal price IDs to the client
-      monthlyPriceId: undefined,
-      annualPriceId: undefined,
+      name: tier.name,
+      tier: tier.tier,
+      monthlyPrice: tier.monthlyPrice,
+      annualPrice: tier.annualPrice,
+      annualSavingsLabel: tier.annualSavingsLabel,
+      description: tier.description,
+      features: tier.features,
+      badge: tier.badge,
+      highlight: tier.highlight,
     }));
   }),
+
+  // Founding-500 live counter (public, for scarcity badge)
+  getFoundingStatus: publicProcedure.query(async () => {
+    const claimed = await getFoundingMemberCount();
+    const remaining = Math.max(0, FOUNDING_MEMBER_CAP - claimed);
+    return { cap: FOUNDING_MEMBER_CAP, claimed, remaining, soldOut: remaining === 0 };
+  }),
+
+  // Get/generate the logged-in user's referral code + share link
+  getMyReferral: protectedProcedure
+    .input(z.object({ origin: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const code = await ensureReferralCode(ctx.user.openId);
+      const link = code ? `${input.origin}/?ref=${code}` : null;
+      return { code, link };
+    }),
 
   // One-time tip jar payment
   createTipCheckout: protectedProcedure
@@ -196,7 +200,7 @@ export const stripeRouter = router({
               currency: "usd",
               product_data: {
                 name: "MLB Edge Tip",
-                description: "Support the MLB Edge model — thank you! 🙏",
+                description: "Support the MLB Edge model — thank you!",
               },
               unit_amount: input.amount,
             },

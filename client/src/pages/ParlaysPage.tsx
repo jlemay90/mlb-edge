@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { RequireTier } from "@/components/RequireTier";
+import { useAccount } from "@/hooks/useAccount";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -314,6 +315,17 @@ function PostGameDebrief({ debrief, result }: { debrief: string; result: ResultT
 
 function LegRow({ leg }: { leg: ParlayLegRow }) {
   const [showReasoning, setShowReasoning] = useState(false);
+  const { isSyndicate } = useAccount();
+
+  // Qualitative strength label for non-Syndicate viewers (no exact numbers).
+  const edgeLabel =
+    leg.edgeScore == null
+      ? null
+      : leg.edgeScore >= 0.08
+      ? "Strong edge"
+      : leg.edgeScore >= 0.04
+      ? "Solid edge"
+      : "Slight edge";
 
   return (
     <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
@@ -339,17 +351,27 @@ function LegRow({ leg }: { leg: ParlayLegRow }) {
         </div>
       </div>
 
-      {/* Edge + probability */}
+      {/* Edge + probability — exact numbers are a Syndicate perk */}
       <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-        {leg.edgeScore != null && (
-          <span className="text-green-400 font-medium">
-            Edge +{(leg.edgeScore * 100).toFixed(1)}%
-          </span>
+        {isSyndicate ? (
+          <>
+            {leg.edgeScore != null && (
+              <span className="text-green-400 font-medium">
+                Edge +{(leg.edgeScore * 100).toFixed(1)}%
+              </span>
+            )}
+            {leg.modelProbability != null && (
+              <span>Model: {(leg.modelProbability * 100).toFixed(0)}%</span>
+            )}
+            <span>Book: {impliedProb(leg.odds)}</span>
+          </>
+        ) : (
+          <>
+            {edgeLabel && <span className="text-green-400 font-medium">{edgeLabel}</span>}
+            <span>Book: {impliedProb(leg.odds)}</span>
+            <span className="text-muted-foreground/70 italic">Raw edge % · Syndicate</span>
+          </>
         )}
-        {leg.modelProbability != null && (
-          <span>Model: {(leg.modelProbability * 100).toFixed(0)}%</span>
-        )}
-        <span>Book: {impliedProb(leg.odds)}</span>
       </div>
 
       {/* Reasoning toggle */}

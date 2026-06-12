@@ -363,7 +363,7 @@ export default function FreePickPage() {
               onClick={() => setLocation("/pricing")}
             >
               <Zap className="w-4 h-4" />
-              Start Sharp — 3-Day Free Trial
+              Get Sharp — $19.99/mo
             </Button>
             <Button
               variant="outline"
@@ -374,7 +374,7 @@ export default function FreePickPage() {
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground/60 text-center">
-            Sharp: 3-day free trial, then $30 first month, then $24.99/mo. Cancel anytime.
+            Edge $9.99/mo · Sharp $19.99/mo · Syndicate $49.99/mo. Cancel anytime.
           </p>
         </div>
 

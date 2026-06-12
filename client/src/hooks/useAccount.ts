@@ -1,8 +1,8 @@
 import { trpc } from "@/lib/trpc";
 
-export type Tier = "free" | "pro" | "sharp";
+export type Tier = "free" | "pro" | "sharp" | "syndicate";
 
-const TIER_RANK: Record<Tier, number> = { free: 0, pro: 1, sharp: 2 };
+const TIER_RANK: Record<Tier, number> = { free: 0, pro: 1, sharp: 2, syndicate: 3 };
 
 /**
  * Central hook for auth + subscription tier. Use this for any paywall gating.
@@ -36,6 +36,7 @@ export function useAccount() {
     hasTier,
     isPro: hasTier("pro"),
     isSharp: hasTier("sharp"),
+    isSyndicate: hasTier("syndicate"),
     refetch,
   };
 }

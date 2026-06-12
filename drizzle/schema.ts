@@ -24,9 +24,16 @@ export const users = mysqlTable("users", {
   // Stripe subscription fields
   stripeCustomerId: varchar("stripeCustomerId", { length: 100 }),
   stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 100 }),
-  subscriptionTier: mysqlEnum("subscriptionTier", ["free", "pro", "sharp"]).default("free").notNull(),
+  subscriptionTier: mysqlEnum("subscriptionTier", ["free", "pro", "sharp", "syndicate"]).default("free").notNull(),
   subscriptionStatus: varchar("subscriptionStatus", { length: 30 }).default("active"),
   subscriptionPeriodEnd: timestamp("subscriptionPeriodEnd"),
+  // Founding-500: first 500 paying members lock their tier's rate for life
+  isFoundingMember: boolean("isFoundingMember").default(false).notNull(),
+  foundingMemberSince: timestamp("foundingMemberSince"),
+  foundingMemberNumber: int("foundingMemberNumber"),
+  // Referral program: "give a week, get a week"
+  referralCode: varchar("referralCode", { length: 16 }),
+  referredBy: varchar("referredBy", { length: 16 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -407,3 +414,52 @@ export const parlayModelFeedback = mysqlTable(
 );
 
 export type ParlayModelFeedback = typeof parlayModelFeedback.$inferSelect;
+
+// ─── Bet Tracker (Syndicate bankroll) ───────────────────────────────────────────
+// User-logged bets for their personal bankroll tracker. All money fields stored
+// as cents (int) to avoid float drift. settledAt/placedAt are UTC ms.
+
+export const userBets = mysqlTable(
+  "user_bets",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("user_id").notNull(),
+    // What was bet
+    description: varchar("description", { length: 300 }).notNull(), // free text, e.g. "Yankees ML"
+    betType: mysqlEnum("bet_type", ["moneyline", "runline", "total", "prop", "parlay", "other"]).default("other").notNull(),
+    odds: int("odds").notNull(), // American odds, e.g. -110 or +145
+    stakeCents: int("stake_cents").notNull(), // amount risked, in cents
+    // Optional link to a model parlay card the user followed
+    parlayCardId: int("parlay_card_id"),
+    // Outcome
+    result: mysqlEnum("result", ["pending", "win", "loss", "push", "void"]).default("pending").notNull(),
+    // payoutCents = total returned (stake + profit) on a win; 0 on loss; stake on push/void
+    payoutCents: int("payout_cents"),
+    placedAt: int("placed_at", { unsigned: true }).notNull(), // UTC ms
+    settledAt: int("settled_at", { unsigned: true }),
+    notes: text("notes"),
+  },
+  (t) => [index("idx_userbets_user").on(t.userId), index("idx_userbets_result").on(t.result)]
+);
+
+export type UserBet = typeof userBets.$inferSelect;
+export type InsertUserBet = typeof userBets.$inferInsert;
+
+// ─── Referral Redemptions ────────────────────────────────────────────────────
+// Audit log of "give a week, get a week" rewards so a referral can only ever be
+// rewarded once per referred user (leak-safe). Each row = one granted reward.
+
+export const referralRedemptions = mysqlTable(
+  "referral_redemptions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    referralCode: varchar("referral_code", { length: 16 }).notNull(),
+    referrerUserId: int("referrer_user_id").notNull(),
+    referredUserId: int("referred_user_id").notNull().unique(), // a user can only be referred once, ever
+    rewardGranted: boolean("reward_granted").default(false).notNull(),
+    createdAt: int("created_at", { unsigned: true }).notNull(),
+  },
+  (t) => [index("idx_referral_referrer").on(t.referrerUserId)]
+);
+
+export type ReferralRedemption = typeof referralRedemptions.$inferSelect;

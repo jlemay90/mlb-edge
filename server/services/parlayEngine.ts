@@ -124,7 +124,7 @@ function buildLegReasoning(game: any, market: string, pick: string, pred: any): 
       parts.push(`Combined SP ERA avg ${avgEra}`);
     }
     if (umpire?.overPct) {
-      parts.push(`Ump over% ${(umpire.overPct * 100).toFixed(0)}% career`);
+      parts.push(`Ump over% ${umpire.overPct.toFixed(0)}% career`);
     }
   }
 
@@ -141,18 +141,23 @@ function buildLegReasoning(game: any, market: string, pick: string, pred: any): 
 // ─── HR Prop Reasoning ────────────────────────────────────────────────────────
 
 function buildHRReasoning(player: any, game: any): string {
+  // No-guess rule: only confirmed Statcast values are shown as plain numbers.
+  // Model-derived (estimated) values are explicitly tagged "(est.)" so a
+  // subscriber never mistakes a projection for a confirmed reading.
   const parts: string[] = [];
-  if (player.recentHRRate) parts.push(`${(player.recentHRRate * 100).toFixed(1)}% HR rate last 14 days`);
-  if (player.barrelPct) parts.push(`Barrel% ${player.barrelPct.toFixed(1)}%`);
-  if (player.avgExitVelo) parts.push(`Avg exit velo ${player.avgExitVelo.toFixed(1)} mph`);
-  if (player.iso) parts.push(`ISO ${player.iso.toFixed(3)}`);
+  const tag = (real: boolean | undefined) => (real ? "" : " (est.)");
+  if (player.recentHRRate)
+    parts.push(`${(player.recentHRRate * 100).toFixed(1)}% HR rate last 14 days${tag(player.hrRateReal)}`);
+  if (player.barrelPct) parts.push(`Barrel% ${player.barrelPct.toFixed(1)}%${tag(player.barrelPctReal)}`);
+  if (player.avgExitVelo) parts.push(`Avg exit velo ${player.avgExitVelo.toFixed(1)} mph${tag(player.avgExitVeloReal)}`);
+  if (player.iso) parts.push(`ISO ${player.iso.toFixed(3)}${tag(player.isoReal)}`);
   const weather = game?.weather;
   if (weather?.windDir?.includes("Out")) parts.push(`Wind blowing out ${weather.windDir} at ${weather.windSpeed} mph — HR conditions`);
   if (weather?.temp && weather.temp > 80) parts.push(`${weather.temp}°F — ball carries`);
   const pf = game?.parkFactor?.hr;
   if (pf && pf > 105) parts.push(`HR-friendly park (HR park factor ${pf})`);
   if (player.vsHandedness) parts.push(`Strong splits vs ${player.vsHandedness} pitching`);
-  return parts.length > 0 ? parts.join(" · ") : "Statcast profile and conditions favor HR production.";
+  return parts.length > 0 ? parts.join(" · ") : "Model-projected power conditions favor HR production.";
 }
 
 // ─── Candidate Leg Extraction ─────────────────────────────────────────────────
@@ -261,8 +266,21 @@ function buildValueParlay(candidates: CandidateLeg[], props: any[]): GeneratedPa
   const deduped = dedupeByGame(candidates);
   const base = deduped.slice(0, 3);
 
-  // Add best prop if available and edge is strong
-  const bestProp = props.find((p) => p.edgeScore > 0.08 && p.confidenceTier === "A");
+  // Add best prop ONLY if it has a real model projection AND real odds.
+  // No-guess rule: never fabricate a win probability (was defaulting to 0.6) or
+  // attach a prop with missing odds. If the real data isn't there, we skip it.
+  const propOddsValid = (p: any) => {
+    const o = p?.pick === "over" ? p?.overOdds : p?.underOdds;
+    return typeof o === "number" && Number.isFinite(o);
+  };
+  const bestProp = props.find(
+    (p) =>
+      p.edgeScore > 0.08 &&
+      p.confidenceTier === "A" &&
+      typeof p.modelProjection === "number" &&
+      Number.isFinite(p.modelProjection) &&
+      propOddsValid(p)
+  );
   if (bestProp && base.length <= 3) {
     base.push({
       gamePk: bestProp.eventId ?? 0,
@@ -274,7 +292,7 @@ function buildValueParlay(candidates: CandidateLeg[], props: any[]): GeneratedPa
       pickLabel: `${bestProp.playerName} ${bestProp.propType} ${bestProp.pick} ${bestProp.line}`,
       odds: bestProp.pick === "over" ? bestProp.overOdds : bestProp.underOdds,
       edgeScore: bestProp.edgeScore,
-      modelProbability: bestProp.modelProjection ?? 0.6,
+      modelProbability: bestProp.modelProjection,
       reasoning: buildLegReasoning(null, "prop", bestProp.pick, bestProp),
       confidence: bestProp.edgeScore * 2,
     });
@@ -287,14 +305,26 @@ function buildValueParlay(candidates: CandidateLeg[], props: any[]): GeneratedPa
   return { type: "value", legs: base, combinedOdds, totalLegs: base.length, reasoning };
 }
 
-function buildLottoParlay(candidates: CandidateLeg[]): GeneratedParlay {
-  // Max legs, minimum +4000 combined odds, swing for the fences
+function buildLottoParlay(candidates: CandidateLeg[], powerLegs: CandidateLeg[] = []): GeneratedParlay {
+  // Lotto must be DISTINCT from Power. Power takes the safest top-confidence legs;
+  // Lotto swings for the fences by biasing toward higher-odds (plus-money / longshot)
+  // legs and de-prioritizing the chalky favorites Power already used.
   const deduped = dedupeByGame(candidates);
+  const powerKeys = new Set(powerLegs.map((l) => `${l.gamePk}:${l.market}:${l.pick}`));
+
+  // Rank by PAYOUT potential (higher American odds first), not pure confidence.
+  // This naturally favors underdogs, plus-money totals, and run lines over -200 favorites.
+  const byPayout = [...deduped].sort((a, b) => b.odds - a.odds);
+
+  // Prefer legs NOT already in Power so the two cards diverge; fall back to the rest if needed.
+  const fresh = byPayout.filter((l) => !powerKeys.has(`${l.gamePk}:${l.market}:${l.pick}`));
+  const ordered = [...fresh, ...byPayout.filter((l) => powerKeys.has(`${l.gamePk}:${l.market}:${l.pick}`))];
+
   let legs: CandidateLeg[] = [];
   let combinedOdds = 100;
 
-  // Keep adding legs until we hit +4000 or run out
-  for (const leg of deduped) {
+  // Stack legs until we reach the +4000 swing target or run out
+  for (const leg of ordered) {
     const testLegs = [...legs, leg];
     const testOdds = combineParlayOdds(testLegs.map((l) => l.odds));
     legs = testLegs;
@@ -302,16 +332,22 @@ function buildLottoParlay(candidates: CandidateLeg[]): GeneratedParlay {
     if (combinedOdds >= 4000) break;
   }
 
-  // If we still haven't hit +4000, use all available legs
-  if (combinedOdds < 4000 && deduped.length > legs.length) {
-    legs = deduped;
+  // If still short of +4000, use everything available (ordered by payout)
+  if (combinedOdds < 4000 && ordered.length > legs.length) {
+    legs = ordered;
     combinedOdds = combineParlayOdds(legs.map((l) => l.odds));
   }
 
+  // Measure how different we are from Power for transparency in the reasoning
+  const overlap = legs.filter((l) => powerKeys.has(`${l.gamePk}:${l.market}:${l.pick}`)).length;
+  const distinctNote = powerLegs.length > 0
+    ? `${legs.length - overlap}/${legs.length} legs differ from the Power Parlay. `
+    : "";
+
   const reasoning = `Lotto Pick — ${legs.length}-leg swing parlay targeting +${combinedOdds} odds. ` +
-    `Each leg selected for its individual statistical merit. ` +
-    `This is a high-risk, high-reward play — size accordingly. ` +
-    `All legs have positive model edge; we're stacking probability for a big payout.`;
+    `Built from the highest-payout edges of the day (plus-money and longshot leans), ` +
+    `intentionally distinct from the safer Power Parlay. ${distinctNote}` +
+    `High-risk, high-reward — size accordingly. Every leg still carries positive model edge.`;
   return { type: "lotto", legs, combinedOdds, totalLegs: legs.length, reasoning };
 }
 
@@ -362,8 +398,12 @@ function buildHRPropParlay(games: any[]): GeneratedParlay {
     const homeHandedness = game.modelSignals?.homeLineupHand ?? null;
     const awayHandedness = game.modelSignals?.awayLineupHand ?? null;
 
-    // Home team batters vs away pitcher
-    if (awayPitcher && awayPitcher.era > 4.2 && conditions >= 1) {
+    // Home team batters vs away pitcher.
+    // Reliability fix: treat unknown ERA as league-average (4.20) instead of
+    // excluding the game, and lower the vulnerability gate to 3.90 so the section
+    // populates on normal slates. Conditions are a bonus, not a hard requirement.
+    const awayEra = awayPitcher?.era ?? 4.20;
+    if (awayPitcher && awayEra >= 3.90) {
       const homeTeamName = game.homeTeam?.name ?? "Home";
       // Real matchup score if available, else estimate from ERA + conditions
       const matchupScore = homeMatchup?.hrScore ?? (0.08 + conditions * 0.02);
@@ -387,14 +427,26 @@ function buildHRPropParlay(games: any[]): GeneratedParlay {
         edgeScore,
         modelProbability: 0.50 + conditions * 0.04 + matchupScore * 0.06,
         reasoning: buildHRReasoning(
-          { recentHRRate: hrRate, barrelPct, avgExitVelo, iso, vsHandedness: awayPitcher.throws ? `${awayPitcher.throws}HP` : null },
+          {
+            recentHRRate: hrRate,
+            barrelPct,
+            avgExitVelo,
+            iso,
+            vsHandedness: awayPitcher.throws ? `${awayPitcher.throws}HP` : null,
+            // No-guess: flag which numbers are real Statcast vs model-derived estimates
+            barrelPctReal: homeMatchup?.hardHitPct != null,
+            avgExitVeloReal: homeMatchup?.xba != null,
+            isoReal: homeMatchup?.slg != null,
+            hrRateReal: homeMatchup?.pa >= 5,
+          },
           game
         ),
       });
     }
 
-    // Away team batters vs home pitcher
-    if (homePitcher && homePitcher.era > 4.2 && conditions >= 1) {
+    // Away team batters vs home pitcher (same relaxed gating as above)
+    const homeEra = homePitcher?.era ?? 4.20;
+    if (homePitcher && homeEra >= 3.90) {
       const awayTeamName = game.awayTeam?.name ?? "Away";
       const matchupScore = awayMatchup?.hrScore ?? (0.07 + conditions * 0.02);
       const barrelPct = awayMatchup?.hardHitPct != null ? awayMatchup.hardHitPct * 100 : 8.8;
@@ -416,23 +468,36 @@ function buildHRPropParlay(games: any[]): GeneratedParlay {
         edgeScore,
         modelProbability: 0.48 + conditions * 0.035 + matchupScore * 0.05,
         reasoning: buildHRReasoning(
-          { recentHRRate: hrRate, barrelPct, avgExitVelo, iso, vsHandedness: homePitcher.throws ? `${homePitcher.throws}HP` : null },
+          {
+            recentHRRate: hrRate,
+            barrelPct,
+            avgExitVelo,
+            iso,
+            vsHandedness: homePitcher.throws ? `${homePitcher.throws}HP` : null,
+            barrelPctReal: awayMatchup?.hardHitPct != null,
+            avgExitVeloReal: awayMatchup?.xba != null,
+            isoReal: awayMatchup?.slg != null,
+            hrRateReal: awayMatchup?.pa >= 5,
+          },
           game
         ),
       });
     }
   }
 
-  // Sort by edge, take top 5, dedupe by game
+  // Sort by edge, dedupe by game, take top 5
   const sorted = hrCandidates
     .sort((a, b) => b.edgeScore - a.edgeScore)
     .filter((v, i, arr) => arr.findIndex((x) => x.gamePk === v.gamePk) === i)
     .slice(0, 5);
 
   const combinedOdds = sorted.length > 0 ? combineParlayOdds(sorted.map((l) => l.odds)) : 500;
-  const reasoning = `HR Prop Parlay — Top ${sorted.length} home run opportunities today based on park factors, wind direction, temperature, and pitcher vulnerability. ` +
-    `Each pick cross-referenced with Statcast barrel rates, exit velocity profiles, and ISO splits. ` +
-    `Weather and park factors are primary drivers — these conditions are favorable for power.`;
+  const reasoning = sorted.length > 0
+    ? `HR Prop Parlay — Top ${sorted.length} home run opportunities today based on park factors, wind direction, temperature, and pitcher vulnerability. ` +
+      `Each pick cross-referenced with Statcast barrel rates, exit velocity profiles, and ISO splits. ` +
+      `Strongest power spots ranked by combined edge.`
+    : `HR Prop Parlay — No qualifying home run spots today. The slate lacks pitchers vulnerable to power in HR-friendly conditions. ` +
+      `We will not force a pick where the edge is not there.`;
 
   return { type: "hrprop", legs: sorted, combinedOdds, totalLegs: sorted.length, reasoning };
 }
@@ -449,7 +514,7 @@ export function generateDailyParlays(games: any[], props: any[]): GeneratedParla
 
   const power = buildPowerParlay(candidates);
   const value = buildValueParlay(candidates, props);
-  const lotto = buildLottoParlay(candidates);
+  const lotto = buildLottoParlay(candidates, power.legs as CandidateLeg[]);
   const highvalue = buildHighValueParlay(candidates);
   const hrprop = buildHRPropParlay(games);
 

@@ -46,7 +46,23 @@ export async function fetchFinalScores(date: string): Promise<FinalGame[]> {
 
   for (const g of games) {
     const state = g.status?.abstractGameState;
-    if (state !== "Final") continue; // Skip in-progress or postponed
+    const detailed = (g.status?.detailedState ?? "").toLowerCase();
+    // Auto-void: postponed/suspended/cancelled games are recorded as a PUSH so they
+    // never count as a loss. We surface them explicitly (status carries the reason).
+    const isVoided = detailed.includes("postpon") || detailed.includes("suspend") || detailed.includes("cancel");
+    if (isVoided) {
+      results.push({
+        gamePk: g.gamePk,
+        homeTeam: g.teams?.home?.team?.name ?? "",
+        awayTeam: g.teams?.away?.team?.name ?? "",
+        homeScore: 0,
+        awayScore: 0,
+        status: g.status?.detailedState ?? "Postponed",
+        totalRuns: 0,
+      });
+      continue;
+    }
+    if (state !== "Final") continue; // Skip in-progress games (grade later)
 
     const homeScore = g.teams?.home?.score ?? 0;
     const awayScore = g.teams?.away?.score ?? 0;
@@ -76,6 +92,12 @@ function gradeLeg(
   const awayWon = awayScore > homeScore;
   const pick = leg.pick.toLowerCase();
   const label = (leg.pickLabel ?? "").toLowerCase();
+
+  // Auto-void: a postponed/suspended/cancelled game never grades as win/loss.
+  const status = (game.status ?? "").toLowerCase();
+  if (status.includes("postpon") || status.includes("suspend") || status.includes("cancel")) {
+    return { result: "push", actualOutcome: `Game ${game.status} — voided (no action)` };
+  }
 
   const actualOutcome = `${awayTeam} ${awayScore}, ${homeTeam} ${homeScore} (total: ${totalRuns})`;
 

@@ -5,6 +5,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { mlbRouter } from "./mlbRouter";
 import { stripeRouter } from "./stripe/stripeRouter";
 import { parlayRouter } from "./parlayRouter";
+import { betsRouter } from "./betsRouter";
 import { getSubscriptionByOpenId } from "./db";
 
 export const appRouter = router({
@@ -30,7 +31,7 @@ export const appRouter = router({
       return {
         authenticated: true as const,
         user: ctx.user,
-        tier: isOwner ? ("sharp" as const) : sub.tier,
+        tier: isOwner ? ("syndicate" as const) : sub.tier,
         status: isOwner ? "active" : sub.status,
         periodEnd: sub.periodEnd,
         isOwner,
@@ -48,6 +49,7 @@ export const appRouter = router({
   mlb: mlbRouter,
   stripe: stripeRouter,
   parlay: parlayRouter,
+  bets: betsRouter,
 
   // TODO: add feature routers here, e.g.
   // todo: router({

@@ -14,6 +14,7 @@ import TeamsPage from "./pages/TeamsPage";
 import LineMovementPage from "./pages/LineMovementPage";
 import PricingPage from "./pages/PricingPage";
 import BillingPage from "./pages/BillingPage";
+import BankrollPage from "./pages/BankrollPage";
 import LandingPage from "./pages/LandingPage";
 import FreePickPage from "./pages/FreePickPage";
 import LegalPage from "./pages/LegalPage";
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/pricing" component={PricingPage} />
       <Route path="/billing" component={BillingPage} />
       <Route path="/parlays" component={ParlaysPage} />
+      <Route path="/bankroll" component={BankrollPage} />
       <Route path="/landing" component={LandingPage} />
       <Route path="/free-pick" component={FreePickPage} />
       <Route path="/legal" component={LegalPage} />

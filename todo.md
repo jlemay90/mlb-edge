@@ -191,5 +191,44 @@
 - [x] Build /api/scheduled/snapshot-odds handler (3 credits/run, h2h+spreads+totals only, DK preferred)
 - [x] Mount handler in server/_core/index.ts
 - [x] TypeScript clean, 36/36 tests passing
-- [ ] Deploy site, then register heartbeat cron: every 30 min, noon-midnight ET (16:00-04:00 UTC)
-- [ ] Verify snapshots accumulating in DB after first few runs
+- [x] Deploy site and register heartbeat cron: every 30 min, noon-midnight ET (16:00-04:00 UTC) — task_uid: aEGtDZwmt6Szfr5K9RiWgT, next run: 2026-06-11T21:30:00Z
+- [x] Verified: 13 successful runs, 15 snapshots/run (195 total today), all HTTP 200, avg 1-2s per run
+
+## Pricing Overhaul + Conversion (Goal: first 5 sign-ups)
+- [x] Create Stripe prices with lookup_keys (Edge/Sharp/Syndicate monthly + annual) in TEST mode; LIVE via one-time script run
+- [x] Wire products.ts to resolve prices by lookup_key at runtime (works in test + live)
+- [x] Remove card-required trial + any promo period logic from checkout
+- [x] Re-allocate tier features (Edge=daily picks, Sharp=parlays+HR+WHY, Syndicate=raw edge+bankroll+founding badge)
+- [x] DB: add is_founding_member + founding_member_since + referral cols; founding count capped at 500
+- [x] Founding-500: each tier locks ITS OWN rate for life (Edge $9.99 / Sharp $19.99 / Syndicate $49.99)
+- [x] Founding-500 badge + live counter (X of 500 spots left) on pricing/landing
+- [x] Lead with free daily pick (no card) as primary funnel
+- [x] Live W-L record widget on pricing page for trust
+- [x] Update PricingPage UI, landing page pricing section, billing page to new tiers
+- [x] Verify Stripe checkout uses new price IDs by lookup_key (no trial_period_days)
+- [x] Referral program: shareable link + "give a week get a week" (leak-safe one-reward-per-user)
+- [x] Verify prices render correctly across all 3 surfaces
+
+## Syndicate Extras (real value) — Plan B (no time-gate)
+- [x] Bankroll / bet tracker page (Syndicate-gated, real American-odds ROI math, 6 payout tests)
+- [x] Full model-confidence view: raw edge % gated to Syndicate; others see qualitative strength
+- [~] Early access time-gate — DROPPED (Plan B: would throttle acquisition funnel; not faking unbuilt 8AM/CLV claims)
+
+## Ad Creatives + Facebook Copy
+- [~] Winning-bet screenshot ad — DROPPED (fake winnings violate Meta/FTC gambling-ad rules; replaced with compliant brand/offer creative)
+- [x] Generate "model WHY" creative (the reasoning behind a pick) — ad-model-why.png
+- [x] Generate compliant brand/Founding-500 offer creative — ad-founding-offer.png
+- [x] Rewrite Facebook ad copy with new pricing + founding hook + Meta compliance guide (marketing/facebook-ads.md)
+
+## Engine Audit + Fixes (Task B - separate report)
+- [x] Void yesterday's postponed Braves game (gamePk 824589, 0-0) -> set legs 210020/210029 to push, corrected legs_lost on cards 210006/210008
+- [x] Add auto-void rule: postponed/suspended games never counted as W/L going forward (parlayGrader hardened)
+- [x] Honest assessment: is the model actually self-improving?
+- [x] Leak hunt: efficiency + correctness once-over (value-prop fabricated 0.6 default removed; umpire over% ×100 bug fixed)
+- [x] Plain-English summary of how Parlays of the Day are calculated (docs/how-parlays-are-calculated.md)
+- [x] Fix: one parlay always duplicates the Lotto pick - differentiate it (Lotto now biases plus-money/high-odds, diverges from Power)
+- [x] Fix: HR Prop section still not working (relaxed ERA gate, always surfaces top power spots)
+- [x] No-guess: HR reasoning labels model-derived barrel%/exit velo/ISO/HR-rate as "(est.)" not confirmed Statcast
+
+## Pricing QA (verification before checkpoint)
+- [x] Browser QA: Pricing renders correct tier names/prices, founding counter, no trial copy; fixed win% double-multiply bug (2000% -> 20%)

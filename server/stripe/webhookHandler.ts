@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import Stripe from "stripe";
-import { getDb } from "../db";
+import { getDb, claimFoundingMember } from "../db";
 import { users } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
@@ -10,11 +10,11 @@ function getStripe(): Stripe {
   return new Stripe(key, { apiVersion: "2026-05-27.dahlia" });
 }
 
-type SubscriptionTier = "free" | "pro" | "sharp";
+type SubscriptionTier = "free" | "pro" | "sharp" | "syndicate";
 
 function tierFromMetadata(metadata: Record<string, string>): SubscriptionTier {
   const tier = metadata?.tier as SubscriptionTier;
-  if (tier === "pro" || tier === "sharp") return tier;
+  if (tier === "pro" || tier === "sharp" || tier === "syndicate") return tier;
   return "free";
 }
 
@@ -84,10 +84,22 @@ export function registerStripeWebhook(app: Express) {
                   stripeCustomerId: customerId,
                   stripeSubscriptionId: subscriptionId,
                   subscriptionTier: tier,
-                  subscriptionStatus: "trialing",
+                  subscriptionStatus: "active",
                 } as any)
                 .where(eq(users.id, userId));
               console.log(`[Stripe Webhook] User ${userId} upgraded to ${tier}`);
+
+              // Founding-500: lock the rate for life by flagging the user now
+              // that payment is confirmed. claimFoundingMember is cap-safe.
+              try {
+                const [u] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+                if (u?.openId) {
+                  const num = await claimFoundingMember(u.openId);
+                  if (num) console.log(`[Stripe Webhook] User ${userId} claimed founding spot #${num}`);
+                }
+              } catch (e) {
+                console.error("[Stripe Webhook] Founding claim failed (non-fatal):", e);
+              }
             }
             break;
           }

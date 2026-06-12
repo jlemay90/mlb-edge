@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Crown, Zap, TrendingUp, ExternalLink, CheckCircle, AlertCircle, HeartHandshake, Mail } from "lucide-react";
+import { Crown, Zap, Star, TrendingUp, ExternalLink, CheckCircle, AlertCircle, HeartHandshake, Mail, Lock, Gift, Copy } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 
@@ -14,18 +14,21 @@ const TIER_ICONS = {
   free: TrendingUp,
   pro: Zap,
   sharp: Crown,
+  syndicate: Star,
 };
 
 const TIER_COLORS = {
   free: "text-muted-foreground",
   pro: "text-primary",
   sharp: "text-yellow-400",
+  syndicate: "text-yellow-400",
 };
 
 const TIER_LABELS = {
   free: "Free",
-  pro: "Pro",
+  pro: "Edge",
   sharp: "Sharp",
+  syndicate: "Syndicate",
 };
 
 export default function BillingPage() {
@@ -50,6 +53,12 @@ export default function BillingPage() {
     undefined,
     { enabled: !!user }
   );
+
+  const { data: referral } = trpc.stripe.getMyReferral.useQuery(
+    { origin: typeof window !== "undefined" ? window.location.origin : "" },
+    { enabled: !!user }
+  );
+  const { data: referralStats } = trpc.bets.myReferralStats.useQuery(undefined, { enabled: !!user });
 
   const createTip = trpc.stripe.createTipCheckout.useMutation({
     onSuccess: (data) => {
@@ -129,10 +138,17 @@ export default function BillingPage() {
                     MLB Edge {TIER_LABELS[tier]}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {tier === "free" && "Teaser access — start your trial to unlock everything"}
-                    {tier === "pro" && "Full picks, props, line movement, analytics"}
-                    {tier === "sharp" && "Professional-grade edge hunting + parlay builder"}
+                    {tier === "free" && "One free pick a day — upgrade to unlock everything"}
+                    {tier === "pro" && "Every pick, props, line movement, analytics"}
+                    {tier === "sharp" && "Parlays + props built by the model"}
+                    {tier === "syndicate" && "Everything, earliest, with the raw model"}
                   </div>
+                  {subscription?.isFoundingMember && (
+                    <Badge className="mt-1 bg-yellow-500/15 text-yellow-400 border-yellow-500/30 text-xs gap-1">
+                      <Lock className="h-3 w-3" />
+                      Founding Member{subscription?.foundingMemberNumber ? ` #${subscription.foundingMemberNumber}` : ""} — rate locked
+                    </Badge>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -203,12 +219,12 @@ export default function BillingPage() {
                     Team standings (no stats)
                   </div>
                   <div className="mt-3 p-3 bg-primary/10 border border-primary/30 rounded-lg">
-                    <p className="text-xs text-primary font-medium">Start your 7-day Pro trial for just $5 — full picks, props, and analytics.</p>
-                    <Button size="sm" className="mt-2 h-7 text-xs" onClick={() => setLocation("/pricing")}>Start Trial — $5</Button>
+                    <p className="text-xs text-primary font-medium">Upgrade to Edge for $9.99/mo — every pick, props, and analytics.</p>
+                    <Button size="sm" className="mt-2 h-7 text-xs" onClick={() => setLocation("/pricing")}>View Plans</Button>
                   </div>
                 </>
               )}
-              {(tier === "pro" || tier === "sharp") && (
+              {(tier === "pro" || tier === "sharp" || tier === "syndicate") && (
                 <>
                   <div className="flex items-center gap-2 text-foreground">
                     <CheckCircle className="h-4 w-4 text-primary" />
@@ -232,27 +248,77 @@ export default function BillingPage() {
                   </div>
                 </>
               )}
-              {tier === "sharp" && (
+              {(tier === "sharp" || tier === "syndicate") && (
                 <>
                   <div className="flex items-center gap-2 text-foreground">
                     <CheckCircle className="h-4 w-4 text-yellow-400" />
-                    Parlay builder with correlated picks
+                    5 daily parlays (Power, Value, Lotto, High-Value, HR Prop)
                   </div>
                   <div className="flex items-center gap-2 text-foreground">
                     <CheckCircle className="h-4 w-4 text-yellow-400" />
-                    Moonshot HR prop analysis (Statcast 420ft+)
+                    Moonshot HR prop analysis (Statcast-driven)
                   </div>
                   <div className="flex items-center gap-2 text-foreground">
                     <CheckCircle className="h-4 w-4 text-yellow-400" />
                     Steam move alerts + reverse line movement
                   </div>
+                </>
+              )}
+              {tier === "syndicate" && (
+                <>
                   <div className="flex items-center gap-2 text-foreground">
                     <CheckCircle className="h-4 w-4 text-yellow-400" />
-                    Priority support + Discord access
+                    Full model-confidence view — raw edge % on every leg
+                  </div>
+                  <div className="flex items-center gap-2 text-foreground">
+                    <CheckCircle className="h-4 w-4 text-yellow-400" />
+                    Bankroll & bet tracker (live ROI)
+                  </div>
+                  <div className="flex items-center gap-2 text-foreground">
+                    <CheckCircle className="h-4 w-4 text-yellow-400" />
+                    Priority support
                   </div>
                 </>
               )}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Referral */}
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Gift className="h-4 w-4 text-emerald-400" />
+              Give a week, get a week
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Share your link. When a friend signs up and subscribes, you both get a free week of Sharp.
+              {typeof referralStats?.successfulReferrals === "number" && referralStats.successfulReferrals > 0 && (
+                <span className="text-foreground font-medium"> You've referred {referralStats.successfulReferrals} so far.</span>
+              )}
+            </p>
+            {referral?.link ? (
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs bg-muted/40 rounded-md px-3 py-2 truncate text-foreground">
+                  {referral.link}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 shrink-0"
+                  onClick={() => {
+                    navigator.clipboard.writeText(referral.link!);
+                    toast.success("Referral link copied");
+                  }}
+                >
+                  <Copy className="h-3.5 w-3.5" /> Copy
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Sign in to get your referral link.</p>
+            )}
           </CardContent>
         </Card>
 

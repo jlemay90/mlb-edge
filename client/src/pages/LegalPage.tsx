@@ -88,9 +88,14 @@ export default function LegalPage() {
           <h3 className="font-semibold pt-2">4. Subscriptions & Billing</h3>
           <p className="text-sm text-muted-foreground">
             Paid plans are billed on a recurring basis (monthly or annual) through our payment
-            processor, Stripe. Free trials, where offered, convert to paid subscriptions
-            automatically at the end of the trial unless canceled beforehand. You may cancel at any
-            time from the Billing page; cancellation stops future renewals.
+            processor, Stripe. Billing begins immediately upon subscribing at the listed rate. You
+            may cancel at any time from the Billing page; cancellation stops future renewals.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            <strong>Founding Member rate lock:</strong> The first 500 paying members receive a
+            “Founding Member” rate for their tier. That rate will not increase for as long as the
+            subscription remains continuously active. If a Founding Member cancels and later
+            resubscribes, current standard pricing applies.
           </p>
           <h3 className="font-semibold pt-2">5. Acceptable Use</h3>
           <p className="text-sm text-muted-foreground">
@@ -151,9 +156,8 @@ export default function LegalPage() {
           </p>
           <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
             <li>
-              <strong>Free trial:</strong> You will not be charged if you cancel before your trial
-              ends. We collect a payment method up front, and billing begins only when the trial
-              expires.
+              <strong>Cancel anytime:</strong> There are no long-term contracts. You can cancel
+              before your next renewal to avoid further charges.
             </li>
             <li>
               <strong>Cancellations:</strong> You can cancel anytime from the Billing page. You keep
