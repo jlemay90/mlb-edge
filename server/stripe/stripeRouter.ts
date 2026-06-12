@@ -9,7 +9,7 @@ import {
 } from "../db";
 import { users } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
-import { STRIPE_PRODUCTS, FOUNDING_MEMBER_CAP, type SubscriptionTier } from "./products";
+import { STRIPE_PRODUCTS, FOUNDING_MEMBER_CAP, FOUNDING_COUNTER_REVEAL_AT, type SubscriptionTier } from "./products";
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -160,7 +160,11 @@ export const stripeRouter = router({
   getFoundingStatus: publicProcedure.query(async () => {
     const claimed = await getFoundingMemberCount();
     const remaining = Math.max(0, FOUNDING_MEMBER_CAP - claimed);
-    return { cap: FOUNDING_MEMBER_CAP, claimed, remaining, soldOut: remaining === 0 };
+    // Only expose the live count once real momentum exists (see
+    // FOUNDING_COUNTER_REVEAL_AT). Below it, the UI shows the offer with no
+    // number so an early/zero count never reads as "nobody's here."
+    const showCounter = claimed >= FOUNDING_COUNTER_REVEAL_AT;
+    return { cap: FOUNDING_MEMBER_CAP, claimed, remaining, soldOut: remaining === 0, showCounter };
   }),
 
   // Get/generate the logged-in user's referral code + share link

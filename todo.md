@@ -232,3 +232,8 @@
 
 ## Pricing QA (verification before checkpoint)
 - [x] Browser QA: Pricing renders correct tier names/prices, founding counter, no trial copy; fixed win% double-multiply bug (2000% -> 20%)
+
+## Founding counter reveal threshold (UX)
+- [x] Add config: FOUNDING_COUNTER_REVEAL_AT=25 — show live "X of 500 left" only after real signups >= threshold; below it show offer text with no number
+- [x] Wire threshold into getFoundingStatus response (showCounter flag, server-side single source of truth)
+- [x] Update LandingPage + PricingPage to respect showCounter flag

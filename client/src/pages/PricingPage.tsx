@@ -58,6 +58,10 @@ export default function PricingPage() {
   const paidTiers = (pricing || []).filter((t: any) => t.tier !== "free");
   const spotsLeft = founding?.remaining ?? null;
   const foundingActive = (founding?.remaining ?? 0) > 0;
+  // Only show the live "X of 500 left" number once real momentum exists.
+  // Below the reveal threshold we keep the offer/badge but hide the count so a
+  // low or zero number never signals "nobody's here."
+  const showCounter = foundingActive && Boolean(founding?.showCounter) && spotsLeft != null;
 
   return (
     <AppLayout>
@@ -96,12 +100,16 @@ export default function PricingPage() {
             </div>
           )}
 
-          {/* Founding live counter */}
-          {foundingActive && spotsLeft != null && (
+          {/* Founding live counter — only once it reads as momentum */}
+          {showCounter ? (
             <p className="text-sm text-yellow-400 font-medium">
               {spotsLeft} of {founding?.cap} founding spots left — your rate never goes up.
             </p>
-          )}
+          ) : foundingActive ? (
+            <p className="text-sm text-yellow-400 font-medium">
+              Founding rate — lock it in now and your price never goes up.
+            </p>
+          ) : null}
 
           {/* Billing toggle */}
           <div className="flex items-center justify-center gap-3 pt-2">

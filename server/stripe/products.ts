@@ -18,6 +18,13 @@ export type SubscriptionTier = "free" | "pro" | "sharp" | "syndicate";
 
 export const FOUNDING_MEMBER_CAP = 500;
 
+// Only reveal the live "X of 500 spots left" counter once at least this many
+// real founding members have joined. Below the threshold we show the offer
+// ("Founding 500 — lock your rate for life") with NO number, so a low/zero
+// count never de-motivates early visitors. Truthful by construction: we never
+// invent a count — we just withhold it until it reads as momentum.
+export const FOUNDING_COUNTER_REVEAL_AT = 25;
+
 export interface TierConfig {
   name: string;            // user-facing label
   tier: SubscriptionTier;  // internal key

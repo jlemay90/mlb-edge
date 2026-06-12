@@ -416,7 +416,9 @@ export default function LandingPage() {
             <h2 className="text-3xl font-bold text-foreground">Simple, Transparent Pricing</h2>
             <p className="text-muted-foreground">
               Start free. Founding members lock their rate for life.
-              {founding && founding.remaining > 0 ? ` ${founding.remaining} of ${founding.cap} founding spots left.` : ""}
+              {founding && founding.showCounter && founding.remaining > 0
+                ? ` ${founding.remaining} of ${founding.cap} founding spots left.`
+                : ""}
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
