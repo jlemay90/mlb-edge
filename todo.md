@@ -257,6 +257,6 @@
 ## Sportsbook Affiliate Links
 - [x] Create shared/sportsbooks.ts with DraftKings, FanDuel, BetMGM, Caesars affiliate link config
 - [x] Build SportsbookLinks + SportsbookBadges reusable components
-- [x] Inject SportsbookBadges into Dashboard PickCard (shows DK + FD on every pick)
-- [x] Inject SportsbookLinks into FreePickPage (shows all 4 books below the pick card)
-- [ ] Replace placeholder affiliate URLs with real affiliate links once signed up
+- [ ] Sign up for affiliate programs (DK, FD, BetMGM, Caesars) and get approved
+- [ ] Replace placeholder affiliate URLs with real approved links in shared/sportsbooks.ts
+- [ ] Re-inject SportsbookBadges into Dashboard PickCard and SportsbookLinks into FreePickPage once links are live

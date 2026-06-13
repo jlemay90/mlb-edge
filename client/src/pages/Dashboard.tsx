@@ -20,7 +20,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { SportsbookBadges } from "@/components/SportsbookLinks";
 
 function TierBadge({ tier }: { tier: string }) {
   return (
@@ -143,10 +142,6 @@ function PickCard({ pick }: { pick: any }) {
           {(typeof pick.awayPitcher === "object" ? pick.awayPitcher?.name : pick.awayPitcher) || "TBD"} vs {(typeof pick.homePitcher === "object" ? pick.homePitcher?.name : pick.homePitcher) || "TBD"}
         </div>
       )}
-      {/* Sportsbook quick links */}
-      <div className="border-t border-border/40 pt-2">
-        <SportsbookBadges />
-      </div>
     </div>
   );
 }
