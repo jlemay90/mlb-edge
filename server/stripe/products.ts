@@ -14,9 +14,10 @@
 // life. We never change a founder's price; new prices only affect new joiners
 // after the relaunch rates eventually rise.
 
-export type SubscriptionTier = "free" | "pro" | "sharp" | "syndicate";
+export type SubscriptionTier = "free" | "pro" | "sharp" | "syndicate" | "founder";
 
 export const FOUNDING_MEMBER_CAP = 500;
+export const FOUNDER_ONETIME_PRICE = 5000; // $50 one-time
 
 // Only reveal the live "X of 500 spots left" counter once at least this many
 // real founding members have joined. Below the threshold we show the offer
@@ -110,6 +111,24 @@ export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
       "Priority support",
     ],
   },
+  founder: {
+    name: "Founder",
+    tier: "founder",
+    monthlyLookupKey: "",
+    annualLookupKey: "",
+    monthlyPrice: 0,
+    annualPrice: 0,
+    description: "Lifetime Syndicate access. One-time payment. Early believer badge.",
+    badge: "Founder Badge",
+    highlight: true,
+    features: [
+      "Everything in Syndicate — forever",
+      "Lifetime access (one-time $50 payment)",
+      "Founder badge on your profile",
+      "Direct input on product roadmap",
+      "Early access to new features",
+    ],
+  },
 };
 
 // Feature gates — which features require which tier (by rank).
@@ -131,7 +150,7 @@ export const TIER_GATES = {
   earlyAccess: "syndicate" as SubscriptionTier,
 };
 
-const RANK: Record<SubscriptionTier, number> = { free: 0, pro: 1, sharp: 2, syndicate: 3 };
+const RANK: Record<SubscriptionTier, number> = { free: 0, pro: 1, sharp: 2, syndicate: 3, founder: 4 };
 
 export function tierRank(tier: SubscriptionTier): number {
   return RANK[tier] ?? 0;

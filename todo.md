@@ -237,3 +237,14 @@
 - [x] Add config: FOUNDING_COUNTER_REVEAL_AT=25 — show live "X of 500 left" only after real signups >= threshold; below it show offer text with no number
 - [x] Wire threshold into getFoundingStatus response (showCounter flag, server-side single source of truth)
 - [x] Update LandingPage + PricingPage to respect showCounter flag
+
+## Go-live: create LIVE Stripe prices
+- [x] Created all 6 LIVE prices via script with user's sk_live key (Edge/Sharp/Syndicate monthly+annual)
+- [x] Verified all 6 live lookup_keys resolve to active live prices (live=true)
+- [x] Production resolves prices by lookup_key at runtime — no code change/redeploy needed
+
+## NEXT SESSION PRIORITIES (in order)
+
+- [ ] REMINDER: Add refund-webhook handling so tiers auto-downgrade when a subscription is refunded/cancelled in Stripe (currently refunds do NOT remove access)
+- [ ] Advertising push: Facebook ad campaign setup guide, ad creative deployment, targeting strategy for sports bettors
+- [ ] Sportsbook integration: push picks/links to sportsbook affiliate partners (DraftKings, FanDuel, etc.) — affiliate revenue stream on top of subscriptions

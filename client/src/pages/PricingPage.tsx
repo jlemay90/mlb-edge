@@ -12,9 +12,9 @@ import { Check, Zap, Crown, Star, Lock } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 
-type PaidTier = "pro" | "sharp" | "syndicate";
+type PaidTier = "pro" | "sharp" | "syndicate" | "founder";
 
-const ICONS: Record<string, any> = { pro: Zap, sharp: Crown, syndicate: Star };
+const ICONS: Record<string, any> = { pro: Zap, sharp: Crown, syndicate: Star, founder: Crown };
 
 function dollars(cents: number) {
   return (cents / 100).toFixed(cents % 100 === 0 ? 0 : 2);
@@ -48,8 +48,8 @@ export default function PricingPage() {
       return;
     }
     createCheckout.mutate({
-      tier,
-      billing: annual ? "annual" : "monthly",
+      tier: tier as "pro" | "sharp" | "syndicate",
+      billing: tier === "founder" ? "monthly" : (annual ? "annual" : "monthly"),
       origin: window.location.origin,
     });
   }
@@ -123,7 +123,7 @@ export default function PricingPage() {
         </div>
 
         {/* Tier cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-7xl mx-auto">
           {paidTiers.map((tier: any) => {
             const Icon = ICONS[tier.tier] || Zap;
             const isCurrentTier = currentTier === tier.tier;
@@ -176,9 +176,9 @@ export default function PricingPage() {
                   <div className="space-y-1">
                     <div className="flex items-baseline gap-1.5">
                       <span className="text-3xl font-bold text-foreground">
-                        ${dollars(perMonthCents)}
+                        {tier.tier === "founder" ? "$50" : `$${dollars(perMonthCents)}`}
                       </span>
-                      <span className="text-muted-foreground text-sm">/mo</span>
+                      <span className="text-muted-foreground text-sm">{tier.tier === "founder" ? "one-time" : "/mo"}</span>
                     </div>
                     {annual ? (
                       <div className="text-xs text-muted-foreground">
