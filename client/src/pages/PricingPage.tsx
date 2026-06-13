@@ -48,7 +48,7 @@ export default function PricingPage() {
       return;
     }
     createCheckout.mutate({
-      tier: tier as "pro" | "sharp" | "syndicate",
+      tier: tier as "pro" | "sharp" | "syndicate" | "founder",
       billing: tier === "founder" ? "monthly" : (annual ? "annual" : "monthly"),
       origin: window.location.origin,
     });

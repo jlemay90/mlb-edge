@@ -31,8 +31,10 @@ export interface TierConfig {
   tier: SubscriptionTier;  // internal key
   monthlyLookupKey: string;
   annualLookupKey: string;
+  founderLookupKey?: string; // one-time payment lookup key (founder tier only)
   monthlyPrice: number;    // cents
   annualPrice: number;     // cents
+  onetimePrice?: number;   // cents (founder tier only)
   annualSavingsLabel?: string;
   description: string;
   features: string[];
@@ -116,8 +118,10 @@ export const STRIPE_PRODUCTS: Record<SubscriptionTier, TierConfig> = {
     tier: "founder",
     monthlyLookupKey: "",
     annualLookupKey: "",
+    founderLookupKey: "mlbedge_founder_onetime",
     monthlyPrice: 0,
     annualPrice: 0,
+    onetimePrice: 5000, // $50
     description: "Lifetime Syndicate access. One-time payment. Early believer badge.",
     badge: "Founder Badge",
     highlight: true,

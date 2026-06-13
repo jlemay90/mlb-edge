@@ -161,6 +161,53 @@ export function registerStripeWebhook(app: Express) {
             break;
           }
 
+          // Refund: downgrade user to free unless they have a founder (lifetime) tier.
+          // A refunded subscription means they no longer paid — revoke access.
+          case "charge.refunded": {
+            const charge = event.data.object as Stripe.Charge;
+            const customerId = charge.customer as string;
+            if (!customerId) break;
+
+            // Look up the user by Stripe customer ID
+            const [refundedUser] = await db
+              .select()
+              .from(users)
+              .where(eq((users as any).stripeCustomerId, customerId))
+              .limit(1);
+
+            if (!refundedUser) {
+              console.log(`[Stripe Webhook] Refund: no user found for customer ${customerId}`);
+              break;
+            }
+
+            const currentTier = (refundedUser as any).subscriptionTier as string;
+
+            // Founder is a one-time lifetime purchase — only downgrade if
+            // the refund amount equals the full founder price ($50 = 5000 cents).
+            // For subscriptions, always downgrade.
+            const isFounderRefund =
+              currentTier === "founder" && charge.amount_refunded >= 5000;
+
+            if (currentTier !== "founder" || isFounderRefund) {
+              await db
+                .update(users)
+                .set({
+                  subscriptionTier: "free",
+                  subscriptionStatus: "canceled",
+                  stripeSubscriptionId: null,
+                } as any)
+                .where(eq((users as any).stripeCustomerId, customerId));
+              console.log(
+                `[Stripe Webhook] Refund processed — user ${(refundedUser as any).id} downgraded to free`
+              );
+            } else {
+              console.log(
+                `[Stripe Webhook] Partial refund on founder tier — access retained for user ${(refundedUser as any).id}`
+              );
+            }
+            break;
+          }
+
           default:
             console.log(`[Stripe Webhook] Unhandled event type: ${event.type}`);
         }

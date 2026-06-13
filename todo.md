@@ -248,3 +248,15 @@
 - [ ] REMINDER: Add refund-webhook handling so tiers auto-downgrade when a subscription is refunded/cancelled in Stripe (currently refunds do NOT remove access)
 - [ ] Advertising push: Facebook ad campaign setup guide, ad creative deployment, targeting strategy for sports bettors
 - [ ] Sportsbook integration: push picks/links to sportsbook affiliate partners (DraftKings, FanDuel, etc.) — affiliate revenue stream on top of subscriptions
+
+## Refund Webhook + Founder Tier Checkout
+- [x] Add charge.refunded webhook handler — auto-downgrade to free on full refund; founder only downgraded if full $50 refunded
+- [x] Founder tier checkout: mode=payment (one-time $50), founderLookupKey in products.ts, stripeRouter handles founder separately
+- [x] Fix PricingPage handleUpgrade to accept founder tier and pass correct billing type
+
+## Sportsbook Affiliate Links
+- [x] Create shared/sportsbooks.ts with DraftKings, FanDuel, BetMGM, Caesars affiliate link config
+- [x] Build SportsbookLinks + SportsbookBadges reusable components
+- [x] Inject SportsbookBadges into Dashboard PickCard (shows DK + FD on every pick)
+- [x] Inject SportsbookLinks into FreePickPage (shows all 4 books below the pick card)
+- [ ] Replace placeholder affiliate URLs with real affiliate links once signed up

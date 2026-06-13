@@ -27,6 +27,7 @@ import {
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
+import { SportsbookLinks } from "@/components/SportsbookLinks";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -324,6 +325,13 @@ export default function FreePickPage() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Sportsbook links — shown when a pick is available */}
+        {pick && (
+          <div className="rounded-xl border border-border bg-card/40 p-4">
+            <SportsbookLinks label="Place this bet at:" show={["draftkings", "fanduel", "betmgm", "caesars"]} />
+          </div>
         )}
 
         {/* Upgrade CTA */}

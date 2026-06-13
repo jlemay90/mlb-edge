@@ -67,12 +67,12 @@ export const stripeRouter = router({
     };
   }),
 
-  // Create a Stripe Checkout session for a subscription.
-  // No trials, no intro pricing — clean recurring subscription at the listed rate.
+  // Create a Stripe Checkout session for a subscription or one-time payment.
+  // Founder tier uses mode=payment (one-time $50). All others are subscriptions.
   createCheckout: protectedProcedure
     .input(
       z.object({
-        tier: z.enum(["pro", "sharp", "syndicate"]),
+        tier: z.enum(["pro", "sharp", "syndicate", "founder"]),
         billing: z.enum(["monthly", "annual"]).default("monthly"),
         origin: z.string(),
       })
@@ -80,16 +80,42 @@ export const stripeRouter = router({
     .mutation(async ({ ctx, input }) => {
       const stripe = getStripe();
       const tierConfig = STRIPE_PRODUCTS[input.tier];
-      const isAnnual = input.billing === "annual";
-
-      const lookupKey = isAnnual ? tierConfig.annualLookupKey : tierConfig.monthlyLookupKey;
-      const priceId = await resolvePriceId(stripe, lookupKey);
 
       // Founding status is informational at checkout time; it is officially
-      // claimed in the webhook once payment succeeds. We pass intent through
-      // metadata so the webhook can lock the rate.
+      // claimed in the webhook once payment succeeds.
       const spotsRemaining = await getFoundingSpotsRemaining();
       const foundingEligible = spotsRemaining > 0;
+
+      // ── Founder: one-time payment ──────────────────────────────────────────
+      if (input.tier === "founder") {
+        const lookupKey = tierConfig.founderLookupKey;
+        if (!lookupKey) throw new Error("Founder lookup key not configured");
+        const priceId = await resolvePriceId(stripe, lookupKey);
+
+        const session = await stripe.checkout.sessions.create({
+          mode: "payment",
+          line_items: [{ price: priceId, quantity: 1 }],
+          customer_email: ctx.user.email || undefined,
+          client_reference_id: ctx.user.id.toString(),
+          metadata: {
+            user_id: ctx.user.id.toString(),
+            customer_email: ctx.user.email || "",
+            customer_name: ctx.user.name || "",
+            tier: "founder",
+            billing: "onetime",
+            founding_eligible: foundingEligible ? "1" : "0",
+          },
+          allow_promotion_codes: true,
+          success_url: `${input.origin}/billing?success=1&tier=founder`,
+          cancel_url: `${input.origin}/pricing?canceled=1`,
+        });
+        return { url: session.url };
+      }
+
+      // ── Subscription tiers ─────────────────────────────────────────────────
+      const isAnnual = input.billing === "annual";
+      const lookupKey = isAnnual ? tierConfig.annualLookupKey : tierConfig.monthlyLookupKey;
+      const priceId = await resolvePriceId(stripe, lookupKey);
 
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: "subscription",
