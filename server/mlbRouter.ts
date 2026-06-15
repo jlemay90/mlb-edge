@@ -385,7 +385,7 @@ export const mlbRouter = router({
     .input(z.object({ date: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const date = input?.date || new Date().toISOString().split("T")[0];
-      return cached(`todaysGames:${date}`, TTL.picks, async () => {
+      return cached(`todaysGames:${date}`, TTL.schedule, async () => {
       const [schedule, oddsData] = await Promise.all([
         fetchTodaysSchedule(date),
         fetchMLBOdds("h2h,spreads,totals").catch(() => []),

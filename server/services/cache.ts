@@ -63,7 +63,7 @@ export function clearCache(): void {
 
 /** Common TTLs. */
 export const TTL = {
-  schedule: 10 * 60 * 1000, // 10 min — schedule/probables rarely change intraday
+  schedule: 30 * 60 * 1000, // 30 min — schedule/probables change when pitchers swap or games end
   odds: 5 * 60 * 1000, // 5 min — odds move, but not second-to-second
   weather: 30 * 60 * 1000, // 30 min — ballpark weather
   picks: 5 * 60 * 1000, // 5 min — aggregate model output

@@ -25,7 +25,7 @@ export const STADIUM_DATA: Record<
     surface: string;
   }
 > = {
-  133: { name: "Oakland Coliseum", lat: 37.7516, lon: -122.2005, altFt: 25, parkFactorRuns: 95, parkFactorHR: 88, parkFactorHits: 96, surface: "grass" },
+  133: { name: "Sutter Health Park", lat: 38.5816, lon: -121.4944, altFt: 26, parkFactorRuns: 115, parkFactorHR: 125, parkFactorHits: 110, surface: "grass" },
   134: { name: "PNC Park", lat: 40.4469, lon: -80.0057, altFt: 730, parkFactorRuns: 97, parkFactorHR: 96, parkFactorHits: 98, surface: "grass" },
   135: { name: "Petco Park", lat: 32.7073, lon: -117.1566, altFt: 62, parkFactorRuns: 91, parkFactorHR: 86, parkFactorHits: 93, surface: "grass" },
   136: { name: "T-Mobile Park", lat: 47.5914, lon: -122.3325, altFt: 0, parkFactorRuns: 96, parkFactorHR: 94, parkFactorHits: 97, surface: "grass" },
@@ -424,7 +424,7 @@ export const ODDS_TEAM_MAP: Record<string, number> = {
   "Boston Red Sox": 111, "Chicago Cubs": 112, "Cincinnati Reds": 113,
   "Cleveland Guardians": 114, "Colorado Rockies": 115, "Detroit Tigers": 116,
   "Houston Astros": 117, "Kansas City Royals": 118, "Los Angeles Dodgers": 119,
-  "Washington Nationals": 120, "New York Mets": 121, "Oakland Athletics": 133,
+  "Washington Nationals": 120, "New York Mets": 121,   "Las Vegas Athletics": 133,
   "Pittsburgh Pirates": 134, "San Diego Padres": 135, "Seattle Mariners": 136,
   "San Francisco Giants": 137, "St. Louis Cardinals": 138, "Tampa Bay Rays": 139,
   "Texas Rangers": 140, "Toronto Blue Jays": 141, "Minnesota Twins": 142,
@@ -660,7 +660,7 @@ export const PARK_FACTOR_SPLITS: Record<number, { hrL: number; hrR: number; runs
   119: { hrL: 94,  hrR: 98,  runsL: 96,  runsR: 98  }, // Dodger Stadium
   120: { hrL: 99,  hrR: 101, runsL: 99,  runsR: 100 }, // Nationals Park
   121: { hrL: 90,  hrR: 96,  runsL: 94,  runsR: 97  }, // Citi Field
-  133: { hrL: 86,  hrR: 90,  runsL: 93,  runsR: 96  }, // Oakland Coliseum
+  133: { hrL: 130, hrR: 120, runsL: 118, runsR: 112 }, // Sutter Health Park (extremely hitter-friendly)
   134: { hrL: 94,  hrR: 98,  runsL: 96,  runsR: 98  }, // PNC Park
   135: { hrL: 84,  hrR: 88,  runsL: 90,  runsR: 92  }, // Petco Park
   136: { hrL: 92,  hrR: 96,  runsL: 95,  runsR: 97  }, // T-Mobile Park

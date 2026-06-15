@@ -260,3 +260,10 @@
 - [ ] Sign up for affiliate programs (DK, FD, BetMGM, Caesars) and get approved
 - [ ] Replace placeholder affiliate URLs with real approved links in shared/sportsbooks.ts
 - [ ] Re-inject SportsbookBadges into Dashboard PickCard and SportsbookLinks into FreePickPage once links are live
+
+## Cache & Data Fixes (Jun 14)
+- [x] Fix pitcher/game time staleness — increase schedule cache TTL from 10 min to 30 min
+- [x] Fix getTodaysGames to use TTL.schedule instead of TTL.picks
+- [x] Update stadium 133 from Oakland Coliseum to Sutter Health Park with hitter-friendly park factors (parkFactorRuns: 115, parkFactorHR: 125, parkFactorHits: 110)
+- [x] Update team name mapping to "Las Vegas Athletics" for stadium 133
+- [x] Update secondary park factors for Sutter Health Park (hrL: 130, hrR: 120, runsL: 118, runsR: 112)
