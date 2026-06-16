@@ -283,6 +283,11 @@
 - [ ] Document webhook usage for ChatGPT (Codex)
 - [ ] Test ChatGPT → Webhook → UI changes workflow
 
+## Parlay Structure Improvements (Jun 16)
+- [x] Remove same-game deduplication to allow multiple legs from same game
+- [x] Prioritize confidence over correlation control (Power, Value, Lotto, HighValue)
+- [x] Verified 55/55 tests passing
+
 ## Pending (Weekly Reminders)
 - [ ] Database connection fix (retry SQL queries)
 - [ ] Historical backtesting on new model changes

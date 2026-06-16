@@ -249,9 +249,9 @@ function dedupeByGame(legs: CandidateLeg[], maxPerGame = 1): CandidateLeg[] {
 // ─── Parlay Builders ──────────────────────────────────────────────────────────
 
 function buildPowerParlay(candidates: CandidateLeg[]): GeneratedParlay {
-  // 5-6 legs, highest confidence, max 1 leg per game, prefer mix of markets
-  const deduped = dedupeByGame(candidates);
-  const legs = deduped.slice(0, 6);
+  // 5-6 legs, highest confidence, allow multiple legs per game if confidence warrants it
+  // (removed same-game deduplication to prioritize confidence over correlation control)
+  const legs = candidates.slice(0, 6);
   const combinedOdds = combineParlayOdds(legs.map((l) => l.odds));
   const avgEdge = legs.reduce((s, l) => s + l.edgeScore, 0) / legs.length;
   const reasoning = `Power Parlay — ${legs.length} legs selected from today's highest-edge picks. ` +
@@ -361,7 +361,7 @@ function buildHighValueParlay(candidates: CandidateLeg[]): GeneratedParlay {
 
   let legs: CandidateLeg[] = [];
   if (underdog) legs.push(underdog);
-  if (bestTotal && legs.length < 2 && (!underdog || bestTotal.gamePk !== underdog.gamePk)) {
+  if (bestTotal && legs.length < 2) {
     legs.push(bestTotal);
   }
   if (legs.length === 0) legs = candidates.slice(0, 1);
