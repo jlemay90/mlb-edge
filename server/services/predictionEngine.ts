@@ -228,12 +228,19 @@ export function projectTeamRuns(features: GameFeatures, side: "home" | "away"): 
     runs += splitAdj;
   }
 
-  // Park factor adjustment
+  // Park factor adjustment with hierarchy — extreme parks (Coors, Sutter Health) override wind signals
   if (features.parkFactorRuns) {
-    runs *= features.parkFactorRuns / 100;
+    const parkFactor = features.parkFactorRuns / 100;
+    runs *= parkFactor;
+    
+    // For extreme parks (parkFactor > 1.10), dampen negative weather signals
+    // This prevents wind-in from negating Coors/Sutter Health's inherent offensive boost
+    if (features.parkFactorRuns > 110 && features.weatherRunImpact && features.weatherRunImpact < 0) {
+      features.weatherRunImpact *= 0.5; // Reduce negative weather impact in extreme parks
+    }
   }
 
-  // Weather impact
+  // Weather impact — reduced for extreme parks to prevent signal conflicts
   if (features.weatherRunImpact) {
     runs += features.weatherRunImpact / 2; // split between both teams
   }

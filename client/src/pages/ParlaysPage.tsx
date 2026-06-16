@@ -185,7 +185,7 @@ function ParlayCard({ card }: { card: ParlayCardRow }) {
           </div>
         </div>
 
-        {/* Leg count + record */}
+        {/* Leg count + record with parlay breakdown */}
         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
           <span>{card.totalLegs} legs</span>
           {card.result !== "pending" && card.result && (
@@ -194,6 +194,7 @@ function ParlayCard({ card }: { card: ParlayCardRow }) {
               <span className="text-green-400">{card.legsWon ?? 0}W</span>
               <span>/</span>
               <span className="text-red-400">{card.legsLost ?? 0}L</span>
+              <span className="text-muted-foreground text-[10px]">(Full-Parlay)</span>
             </>
           )}
         </div>

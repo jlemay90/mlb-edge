@@ -11,6 +11,7 @@ import { serveStatic, setupVite } from "./vite";
 import { registerStripeWebhook } from "../stripe/webhookHandler";
 import { scheduledRefreshHandler } from "../scheduled/refreshHandler";
 import { snapshotOddsHandler } from "../scheduled/snapshotOddsHandler";
+import { handleUIUpdate, listSupportedChanges } from "../webhooks/uiUpdateWebhook";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -53,6 +54,10 @@ async function startServer() {
   // fallthrough. /api/scheduled/* is not auto-registered.
   app.post("/api/scheduled/refresh", scheduledRefreshHandler);
   app.post("/api/scheduled/snapshot-odds", snapshotOddsHandler);
+
+  // UI Update Webhook — allows ChatGPT to request UI changes
+  app.post("/api/webhooks/ui-update", handleUIUpdate);
+  app.get("/api/webhooks/ui-update/supported", listSupportedChanges);
 
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {

@@ -267,3 +267,24 @@
 - [x] Update stadium 133 from Oakland Coliseum to Sutter Health Park with hitter-friendly park factors (parkFactorRuns: 115, parkFactorHR: 125, parkFactorHits: 110)
 - [x] Update team name mapping to "Las Vegas Athletics" for stadium 133
 - [x] Update secondary park factors for Sutter Health Park (hrL: 130, hrR: 120, runsL: 118, runsR: 112)
+
+
+## Model Improvements (Jun 15)
+- [x] Reduce wind weighting for totals (0.04 → 0.025 for out-to-CF, etc.)
+- [x] Increase temperature sensitivity for extreme heat (>82°F: 0.015 → 0.035)
+- [x] Add park factor hierarchy to prevent wind signals from negating Coors/Sutter Health boost
+- [x] Update ParlaysPage to show (Full-Parlay) label for parlay breakdown
+
+## ChatGPT Integration
+- [x] Create UI Update Webhook endpoint (/api/webhooks/ui-update)
+- [x] Add webhook authentication with UI_UPDATE_WEBHOOK_SECRET
+- [x] Create webhook test suite (4 tests passing)
+- [x] Mount webhook in main server with GET /supported endpoint
+- [ ] Document webhook usage for ChatGPT (Codex)
+- [ ] Test ChatGPT → Webhook → UI changes workflow
+
+## Pending (Weekly Reminders)
+- [ ] Database connection fix (retry SQL queries)
+- [ ] Historical backtesting on new model changes
+- [ ] Implement automated learning loop (future)
+- [ ] Sign up for sportsbook affiliate programs (DK, FD, BetMGM, Caesars)

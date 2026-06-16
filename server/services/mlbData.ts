@@ -295,14 +295,15 @@ export function calculateWindRunImpact(
 ): number {
   let impact = 0;
 
-  // Wind direction impact
-  if (windDirLabel === "Out to CF") impact += windSpeedMph * 0.04;
-  else if (windDirLabel === "In from CF") impact -= windSpeedMph * 0.035;
-  else if (windDirLabel.startsWith("Out to")) impact += windSpeedMph * 0.025;
-  else impact -= windSpeedMph * 0.015;
+  // Wind direction impact — reduced weighting to prevent overemphasis
+  if (windDirLabel === "Out to CF") impact += windSpeedMph * 0.025;
+  else if (windDirLabel === "In from CF") impact -= windSpeedMph * 0.02;
+  else if (windDirLabel.startsWith("Out to")) impact += windSpeedMph * 0.015;
+  else impact -= windSpeedMph * 0.01;
 
-  // Temperature impact (warmer = more runs, ball carries further)
-  impact += (tempF - 72) * 0.015;
+  // Temperature impact — increased sensitivity for extreme heat (>82°F)
+  const tempAdj = tempF > 82 ? 0.035 : 0.015;
+  impact += (tempF - 72) * tempAdj;
 
   // Altitude impact (already baked into park factors, add marginal)
   if (altitudeFt > 3000) impact += 0.3;
