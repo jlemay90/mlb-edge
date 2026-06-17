@@ -429,11 +429,20 @@ export const parlayRouter = router({
         else record.pending++;
       }
 
+      const powerCards = filtered.filter((c) => c.type === "power");
+      const topParlayBreakdown = powerCards.length > 0
+        ? [{
+            type: "Power",
+            wins: powerCards.filter((c) => c.result === "win").length,
+            legs: Math.round(powerCards.reduce((sum, c) => sum + (c.totalLegs || 0), 0) / powerCards.length),
+          }]
+        : undefined;
+
       const daysArr = Object.entries(byDate)
         .sort(([a], [b]) => b.localeCompare(a))
         .map(([date, cards]) => ({ date, cards }));
 
-      return { days: daysArr, record, totalParlays: filtered.length };
+      return { days: daysArr, record, totalParlays: filtered.length, topParlayBreakdown };
     }),
 
   /**

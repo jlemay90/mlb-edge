@@ -283,6 +283,12 @@
 - [ ] Document webhook usage for ChatGPT (Codex)
 - [ ] Test ChatGPT → Webhook → UI changes workflow
 
+## Dashboard Display Fix (Jun 16)
+- [x] Update RecordDisplay component to show (Full-Parlay) breakdown
+- [x] Add topParlayBreakdown calculation to getHistory procedure
+- [x] Format: "5-1-0 (Full-Parlay: 5/6 on Power)" showing overall record + parlay breakdown
+- [x] Verified 55/55 tests passing
+
 ## Parlay Structure Improvements (Jun 16)
 - [x] Remove same-game deduplication to allow multiple legs from same game
 - [x] Prioritize confidence over correlation control (Power, Value, Lotto, HighValue)

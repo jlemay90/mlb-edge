@@ -405,9 +405,10 @@ function LegRow({ leg }: { leg: ParlayLegRow }) {
 
 // ─── Record Badge ─────────────────────────────────────────────────────────────
 
-function RecordDisplay({ record }: { record: { wins: number; losses: number; pushes: number; pending: number } }) {
+function RecordDisplay({ record, parlayBreakdown }: { record: { wins: number; losses: number; pushes: number; pending: number }; parlayBreakdown?: { type: string; wins: number; legs: number }[] }) {
   const total = record.wins + record.losses + record.pushes;
   const winPct = total > 0 ? ((record.wins / total) * 100).toFixed(0) : "—";
+  const topParlay = parlayBreakdown?.[0];
 
   return (
     <div className="flex items-center gap-4 flex-wrap">
@@ -416,6 +417,7 @@ function RecordDisplay({ record }: { record: { wins: number; losses: number; pus
         <span className="text-sm font-bold text-foreground">
           {record.wins}–{record.losses}
           {record.pushes > 0 ? `–${record.pushes}` : ""}
+          {topParlay && <span className="text-xs text-muted-foreground ml-1">(Full-Parlay: {topParlay.wins}/{topParlay.legs} on {topParlay.type})</span>}
         </span>
         {total > 0 && (
           <span className="text-xs text-muted-foreground">({winPct}% win rate)</span>
@@ -642,7 +644,7 @@ export default function ParlaysPage() {
                     <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wider">
                       Last 14 Days — Model Record
                     </p>
-                    <RecordDisplay record={historyQuery.data.record} />
+                    <RecordDisplay record={historyQuery.data.record} parlayBreakdown={historyQuery.data.topParlayBreakdown} />
                     <p className="text-xs text-muted-foreground mt-2">
                       {historyQuery.data.totalParlays} total parlays tracked
                     </p>
