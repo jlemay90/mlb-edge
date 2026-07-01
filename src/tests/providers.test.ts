@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fetchFinalScores, fetchMlbSchedule } from "../server/providers/mlbStats";
 import { fetchHistoricalMlbOdds, fetchMlbOdds } from "../server/providers/oddsApi";
-import { fetchGameWeather } from "../server/providers/weather";
+import { fetchGameWeather, fetchHistoricalGameWeather } from "../server/providers/weather";
 
 type FetchCall = {
   url: string;
@@ -266,6 +266,38 @@ describe("weather provider", () => {
     expect(calls.some((call) => call.url.includes("api.open-meteo.com"))).toBe(true);
     expect(result.ok && result.data.source).toBe("open-meteo");
     expect(result.ok && result.data.temperatureF).toBe(74);
+  });
+
+  it("requests historical Open-Meteo archive weather for backtesting", async () => {
+    const calls: FetchCall[] = [];
+    const result = await fetchHistoricalGameWeather({
+      latitude: 38.5802,
+      longitude: -121.513,
+      firstPitchIso: "2025-07-01T02:05:00Z",
+      fetchImpl: async (url, init) => {
+        calls.push({ url, init });
+        return jsonResponse({
+          hourly: {
+            time: ["2025-07-01T01:00", "2025-07-01T02:00", "2025-07-01T03:00"],
+            temperature_2m: [87, 84, 80],
+            wind_speed_10m: [6, 9, 11],
+            wind_direction_10m: [180, 225, 270],
+          },
+        });
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]!.url).toContain("https://archive-api.open-meteo.com/v1/archive");
+    expect(calls[0]!.url).toContain("start_date=2025-07-01");
+    expect(calls[0]!.url).toContain("end_date=2025-07-01");
+    expect(calls[0]!.url).toContain("temperature_unit=fahrenheit");
+    expect(calls[0]!.url).toContain("wind_speed_unit=mph");
+    expect(calls[0]!.url).toContain("timezone=UTC");
+    expect(result.ok && result.data.source).toBe("open-meteo-archive");
+    expect(result.ok && result.data.temperatureF).toBe(84);
+    expect(result.ok && result.data.windSpeedMph).toBe(9);
+    expect(result.ok && result.data.windDirection).toBe("SW");
   });
 
   it("returns a safe weather error when all sources fail", async () => {

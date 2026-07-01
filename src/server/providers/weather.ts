@@ -1,6 +1,6 @@
 import { type FetchLike, type ProviderResult } from "./mlbStats";
 
-export type WeatherSource = "nws" | "open-meteo";
+export type WeatherSource = "nws" | "open-meteo" | "open-meteo-archive";
 
 export type GameWeather = {
   source: WeatherSource;
@@ -19,6 +19,8 @@ export type WeatherRequest = {
   fetchImpl?: FetchLike;
 };
 
+export type HistoricalWeatherRequest = Omit<WeatherRequest, "userAgent">;
+
 export async function fetchGameWeather(request: WeatherRequest): Promise<ProviderResult<GameWeather>> {
   const fetchImpl = request.fetchImpl ?? fetch;
   const nws = await fetchNwsWeather(request, fetchImpl);
@@ -35,6 +37,35 @@ export async function fetchGameWeather(request: WeatherRequest): Promise<Provide
   return {
     ok: false,
     error: `Weather unavailable: ${nws.error}; ${fallback.error}`,
+  };
+}
+
+export async function fetchHistoricalGameWeather(
+  request: HistoricalWeatherRequest
+): Promise<ProviderResult<GameWeather>> {
+  const fetchImpl = request.fetchImpl ?? fetch;
+  const gameDate = isoDateOnly(request.firstPitchIso);
+  const url = new URL("https://archive-api.open-meteo.com/v1/archive");
+  url.searchParams.set("latitude", String(request.latitude));
+  url.searchParams.set("longitude", String(request.longitude));
+  url.searchParams.set("start_date", gameDate);
+  url.searchParams.set("end_date", gameDate);
+  url.searchParams.set("hourly", "temperature_2m,wind_speed_10m,wind_direction_10m");
+  url.searchParams.set("temperature_unit", "fahrenheit");
+  url.searchParams.set("wind_speed_unit", "mph");
+  url.searchParams.set("timezone", "UTC");
+
+  const result = await fetchOpenMeteoWeatherFromUrl(url, request.firstPitchIso, fetchImpl);
+  if (!result.ok) {
+    return result;
+  }
+
+  return {
+    ok: true,
+    data: {
+      ...result.data,
+      source: "open-meteo-archive",
+    },
   };
 }
 
@@ -111,6 +142,14 @@ async function fetchOpenMeteoWeather(
   url.searchParams.set("wind_speed_unit", "mph");
   url.searchParams.set("timezone", "UTC");
 
+  return fetchOpenMeteoWeatherFromUrl(url, request.firstPitchIso, fetchImpl);
+}
+
+async function fetchOpenMeteoWeatherFromUrl(
+  url: URL,
+  firstPitchIso: string,
+  fetchImpl: FetchLike
+): Promise<ProviderResult<GameWeather>> {
   try {
     const response = await fetchImpl(url.toString());
     if (!response.ok) {
@@ -124,7 +163,7 @@ async function fetchOpenMeteoWeather(
     const body = await response.json();
     const hourly = (body as { hourly?: Record<string, unknown[]> }).hourly;
     const times = (hourly?.time ?? []) as string[];
-    const index = nearestTimeIndex(times, request.firstPitchIso);
+    const index = nearestTimeIndex(times, firstPitchIso);
 
     if (!hourly || index === -1) {
       return { ok: false, error: "Open-Meteo response did not include usable hourly data" };
@@ -146,6 +185,15 @@ async function fetchOpenMeteoWeather(
       error: `Open-Meteo request failed: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
+}
+
+function isoDateOnly(dateIso: string): string {
+  const date = new Date(dateIso);
+  if (Number.isNaN(date.getTime())) {
+    return dateIso.slice(0, 10);
+  }
+
+  return date.toISOString().slice(0, 10);
 }
 
 function nearestByTime<T>(items: T[], targetIso: string, getTime: (item: T) => string | undefined): T | undefined {
