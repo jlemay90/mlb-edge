@@ -2,6 +2,7 @@ import { summarizeBacktest, type BacktestPick } from "./backtest";
 import { buildCalibrationBuckets, recommendThresholdChanges } from "./calibration";
 import { buildPickExplanation } from "./explanations";
 import { gradeParlay, gradePick, type FinalGameResult } from "./grading";
+import { buildHistoricalBacktestReadiness } from "./historicalBacktest";
 import { buildDailyParlays } from "./parlays";
 import { analyzeGame, selectQualifiedPicks, type GameAnalysis, type Pick } from "./picks";
 import { type GameFeatures } from "./projection";
@@ -179,6 +180,10 @@ const finalResults: FinalGameResult[] = [
 const gradedPicks = picks.map((pick) => gradePick(pick, finalResults.find((result) => result.gameId === pick.gameId)!));
 const gradedParlays = parlays.map((parlay) => gradeParlay(parlay, finalResults));
 const backtestPicks = buildBacktestPicks(picks);
+const historicalBacktest = buildHistoricalBacktestReadiness({
+  asOfDateIso: "2026-07-01",
+  oddsApiConfigured: true,
+});
 
 export const sampleModelPreview = {
   date: "2026-07-01",
@@ -189,6 +194,7 @@ export const sampleModelPreview = {
   gradedPicks,
   gradedParlays,
   backtestSummary: summarizeBacktest(backtestPicks),
+  historicalBacktest,
   calibrationBuckets: buildCalibrationBuckets(backtestPicks),
   thresholdRecommendations: recommendThresholdChanges(backtestPicks),
   apiHealth: [

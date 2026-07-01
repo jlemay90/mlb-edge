@@ -210,6 +210,8 @@ function GradingView() {
 }
 
 function BacktestView() {
+  const historical = sampleModelPreview.historicalBacktest;
+
   return (
     <div className="dashboard-grid two-col">
       <section className="panel">
@@ -226,6 +228,34 @@ function BacktestView() {
         <p className="muted-copy">
           Backtests report ROI, units, closing-line value coverage, and max drawdown. Missing CLV is marked instead of invented.
         </p>
+      </section>
+      <section className="panel wide-panel">
+        <PanelTitle
+          icon={ShieldCheck}
+          title="Historical 5-Season Status"
+          detail={`${historical.seasons[0]}-${historical.seasons[historical.seasons.length - 1]}`}
+        />
+        <div className="metric-row compact">
+          <Metric label="Status" value={historical.status} tone={historical.status === "verified" ? "gold" : undefined} />
+          <Metric label="Complete" value={`${historical.completedSeasonCount}/${historical.requiredSeasonCount}`} />
+          <Metric label="Picks" value={String(historical.summary.totalPicks)} />
+        </div>
+        <div className="coverage-grid">
+          {historical.coverage.map((season) => (
+            <div className="coverage-row" key={season.season}>
+              <strong>{season.season}</strong>
+              <span>{season.complete ? "complete" : "missing data"}</span>
+              <span>{season.oddsSnapshots} odds</span>
+              <span>{season.finalResults} finals</span>
+              <span>{season.weatherSnapshots} weather</span>
+            </div>
+          ))}
+        </div>
+        <div className="warning-list">
+          {historical.blockers.slice(0, 3).map((blocker) => (
+            <span key={blocker}>{blocker}</span>
+          ))}
+        </div>
       </section>
     </div>
   );

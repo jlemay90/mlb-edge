@@ -168,4 +168,34 @@ describe("persistence and API", () => {
     expect(healthText).not.toContain("odds-secret-value");
     expect(healthText).not.toContain("openai-secret-value");
   });
+
+  it("exposes historical backtest readiness without claiming unverified success", async () => {
+    const db = migratedDb();
+    dbs.push(db);
+    const app = createApp({
+      db,
+      config: {
+        oddsApiKey: "odds-secret-value",
+        openAiApiKey: "openai-secret-value",
+        nwsUserAgent: "mlb-edge-lab/test",
+      },
+    });
+
+    const historical = (await request(app, "/api/backtest/historical?asOf=2026-07-01")) as {
+      seasons: number[];
+      status: string;
+      summary: { totalPicks: number };
+      canClaimHighSuccessRate: boolean;
+      blockers: string[];
+    };
+    const responseText = JSON.stringify(historical);
+
+    expect(historical.seasons).toEqual([2021, 2022, 2023, 2024, 2025]);
+    expect(historical.status).toBe("blocked");
+    expect(historical.summary.totalPicks).toBe(0);
+    expect(historical.canClaimHighSuccessRate).toBe(false);
+    expect(historical.blockers.join(" ")).toContain("imported historical replay data");
+    expect(responseText).not.toContain("odds-secret-value");
+    expect(responseText).not.toContain("openai-secret-value");
+  });
 });

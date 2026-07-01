@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildHistoricalBacktestReadiness,
   getDefaultCompletedSeasons,
   runHistoricalBacktest,
   type HistoricalSeasonReplay,
@@ -66,6 +67,20 @@ describe("historical backtest orchestration", () => {
   it("defaults to the five most recent completed MLB seasons", () => {
     expect(getDefaultCompletedSeasons("2026-07-01")).toEqual([2021, 2022, 2023, 2024, 2025]);
     expect(getDefaultCompletedSeasons("2026-12-01")).toEqual([2022, 2023, 2024, 2025, 2026]);
+  });
+
+  it("reports missing imported replay data instead of treating preview samples as historical proof", () => {
+    const report = buildHistoricalBacktestReadiness({
+      asOfDateIso: "2026-07-01",
+      oddsApiConfigured: false,
+    });
+
+    expect(report.seasons).toEqual([2021, 2022, 2023, 2024, 2025]);
+    expect(report.status).toBe("blocked");
+    expect(report.summary.totalPicks).toBe(0);
+    expect(report.canClaimHighSuccessRate).toBe(false);
+    expect(report.blockers.join(" ")).toContain("ODDS_API_KEY");
+    expect(report.blockers.join(" ")).toContain("imported historical replay data");
   });
 
   it("blocks high-success claims when historical odds access is missing", async () => {

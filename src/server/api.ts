@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import { pathToFileURL } from "node:url";
 import { summarizeBacktest, type BacktestPick } from "../domain/backtest";
+import { buildHistoricalBacktestReadiness } from "../domain/historicalBacktest";
 import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "../domain/modelConfig";
 import { createDatabase, runMigrations, type Db } from "./db/client";
 import { getCurrentModelVersion, saveModelVersion } from "./repositories/modelRepository";
@@ -70,6 +71,21 @@ export function createApp(dependencies: AppDependencies = {}): Express {
   app.post("/api/backtest", (req, res) => {
     const picks = ((req.body as { picks?: BacktestPick[] }).picks ?? []) as BacktestPick[];
     res.json({ summary: summarizeBacktest(picks) });
+  });
+
+  app.get("/api/backtest/historical", (req, res) => {
+    const asOfDateIso = typeof req.query.asOf === "string" ? req.query.asOf : todayIsoDate();
+
+    try {
+      res.json(
+        buildHistoricalBacktestReadiness({
+          asOfDateIso,
+          oddsApiConfigured: Boolean(config.oddsApiKey?.trim()),
+        })
+      );
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Invalid historical backtest request" });
+    }
   });
 
   app.get("/api/model", (_req, res) => {

@@ -49,6 +49,12 @@ export type HistoricalBacktestRequest = {
   minimumWinRateForHighSuccess?: number;
 };
 
+export type HistoricalBacktestReadinessRequest = {
+  asOfDateIso: string;
+  oddsApiConfigured: boolean;
+  requiredSeasonCount?: number;
+};
+
 const DEFAULT_REQUIRED_SEASONS = 5;
 const DEFAULT_HIGH_SUCCESS_WIN_RATE = 0.55;
 
@@ -102,6 +108,50 @@ export async function runHistoricalBacktest(
     blockers,
     canClaimHighSuccessRate:
       status === "verified" && summary.roi > 0 && summary.winRate >= minimumWinRate,
+  };
+}
+
+export function buildHistoricalBacktestReadiness(
+  request: HistoricalBacktestReadinessRequest
+): HistoricalBacktestReport {
+  const requiredSeasonCount = request.requiredSeasonCount ?? DEFAULT_REQUIRED_SEASONS;
+  const seasons = getDefaultCompletedSeasons(request.asOfDateIso, requiredSeasonCount);
+  const missingSignals: RequiredHistoricalSignal[] = [
+    "historical odds",
+    "final results",
+    "weather",
+    "park factors",
+    "feature snapshots",
+  ];
+  const coverage = seasons.map((season) => ({
+    season,
+    scheduledGames: 0,
+    finalResults: 0,
+    oddsSnapshots: 0,
+    weatherSnapshots: 0,
+    parkFactors: 0,
+    featureSnapshots: 0,
+    missingSignals,
+    blockers: [`No imported historical replay data found for ${season}.`],
+    complete: false,
+  }));
+  const oddsBlocker = request.oddsApiConfigured
+    ? "ODDS_API_KEY is configured, but historical odds access and imported snapshots are not verified yet."
+    : "ODDS_API_KEY is missing; historical MLB odds snapshots are required before a five-season backtest can be verified.";
+
+  return {
+    seasons,
+    requiredSeasonCount,
+    completedSeasonCount: 0,
+    status: "blocked",
+    summary: runBacktest([]),
+    coverage,
+    blockers: [
+      `No imported historical replay data found for seasons ${seasons.join(", ")}.`,
+      oddsBlocker,
+      `Need ${requiredSeasonCount} completed seasons with odds, results, weather, park factors, and feature snapshots; currently have 0.`,
+    ],
+    canClaimHighSuccessRate: false,
   };
 }
 
