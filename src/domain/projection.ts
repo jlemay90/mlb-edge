@@ -1,10 +1,13 @@
 import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "./modelConfig";
+import { applyKnownBallparkContext } from "./ballparks";
 
 export type GameFeatures = {
   gameId: string;
   date: string;
   homeTeam: string;
   awayTeam: string;
+  venueName?: string;
+  venueId?: string;
   homeMoneyline?: number;
   awayMoneyline?: number;
   total?: number;
@@ -20,6 +23,7 @@ export type GameFeatures = {
   homeBullpenRest?: number;
   awayBullpenRest?: number;
   parkRunFactor?: number;
+  parkFactorSource?: string;
   weatherRunImpact?: number;
   homeLineupConfirmed?: boolean;
   awayLineupConfirmed?: boolean;
@@ -44,12 +48,13 @@ export function projectTeamRuns(
   side: "home" | "away",
   config: ModelConfig = DEFAULT_MODEL_CONFIG
 ): number {
+  const contextualFeatures = applyKnownBallparkContext(features);
   const isHome = side === "home";
-  const offense = isHome ? features.homeWrcPlus : features.awayWrcPlus;
-  const opposingStarterFip = isHome ? features.awayStarterFip : features.homeStarterFip;
-  const opposingBullpenRest = isHome ? features.awayBullpenRest : features.homeBullpenRest;
-  const lineupConfirmed = isHome ? features.homeLineupConfirmed : features.awayLineupConfirmed;
-  const recentForm = isHome ? features.homeRecentForm : features.awayRecentForm;
+  const offense = isHome ? contextualFeatures.homeWrcPlus : contextualFeatures.awayWrcPlus;
+  const opposingStarterFip = isHome ? contextualFeatures.awayStarterFip : contextualFeatures.homeStarterFip;
+  const opposingBullpenRest = isHome ? contextualFeatures.awayBullpenRest : contextualFeatures.homeBullpenRest;
+  const lineupConfirmed = isHome ? contextualFeatures.homeLineupConfirmed : contextualFeatures.awayLineupConfirmed;
+  const recentForm = isHome ? contextualFeatures.homeRecentForm : contextualFeatures.awayRecentForm;
 
   let runs = LEAGUE_RUNS_PER_TEAM;
 
@@ -65,12 +70,12 @@ export function projectTeamRuns(
     runs += ((60 - opposingBullpenRest) / 50) * config.weights.bullpen;
   }
 
-  if (features.parkRunFactor !== undefined) {
-    runs *= 1 + ((features.parkRunFactor - 100) / 100) * config.weights.park;
+  if (contextualFeatures.parkRunFactor !== undefined) {
+    runs *= 1 + ((contextualFeatures.parkRunFactor - 100) / 100) * config.weights.park;
   }
 
-  if (features.weatherRunImpact !== undefined) {
-    runs += (features.weatherRunImpact / 2) * config.weights.weather;
+  if (contextualFeatures.weatherRunImpact !== undefined) {
+    runs += (contextualFeatures.weatherRunImpact / 2) * config.weights.weather;
   }
 
   if (lineupConfirmed) {
@@ -92,12 +97,13 @@ export function projectGame(
   features: GameFeatures,
   config: ModelConfig = DEFAULT_MODEL_CONFIG
 ): GameProjection {
-  const projectedHomeRuns = projectTeamRuns(features, "home", config);
-  const projectedAwayRuns = projectTeamRuns(features, "away", config);
+  const contextualFeatures = applyKnownBallparkContext(features);
+  const projectedHomeRuns = projectTeamRuns(contextualFeatures, "home", config);
+  const projectedAwayRuns = projectTeamRuns(contextualFeatures, "away", config);
   const winProbabilities = calculateWinProbabilities(projectedHomeRuns, projectedAwayRuns);
 
   return {
-    features,
+    features: contextualFeatures,
     projectedHomeRuns,
     projectedAwayRuns,
     projectedTotal: roundTo(projectedHomeRuns + projectedAwayRuns, 2),
@@ -153,4 +159,3 @@ function roundTo(value: number, digits: number): number {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
 }
-

@@ -75,6 +75,18 @@ describe("parlay assembly", () => {
     expect(cards[0]!.legs[1]!.reasoning).toContain("Weather boosts run scoring");
   });
 
+  it("keeps the matchup visible for every parlay leg", () => {
+    const cards = buildDailyParlays([
+      pick({ id: "a", gameId: "game-a" }),
+      pick({ id: "b", gameId: "game-b", edge: 0.07 }),
+    ]);
+
+    expect(cards[0]!.legs.map((leg) => leg.matchup)).toEqual([
+      "Away Club at Home Club",
+      "Away Club at Home Club",
+    ]);
+  });
+
   it("warns when selected legs come from the same game", () => {
     const cards = buildDailyParlays([
       pick({ id: "game-1:moneyline:home", gameId: "game-1", market: "moneyline", selection: "home", edge: 0.09 }),

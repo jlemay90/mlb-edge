@@ -40,14 +40,15 @@ export function analyzeGame(
   config: ModelConfig = DEFAULT_MODEL_CONFIG
 ): GameAnalysis {
   const projection = projectGame(features, config);
+  const contextualFeatures = projection.features;
   const picks = [
-    buildMoneylinePick(features, projection, config),
-    buildRunlinePick(features, projection, config),
-    buildTotalPick(features, projection, config),
+    buildMoneylinePick(contextualFeatures, projection, config),
+    buildRunlinePick(contextualFeatures, projection, config),
+    buildTotalPick(contextualFeatures, projection, config),
   ].filter((pick): pick is Pick => pick !== null);
 
   return {
-    gameId: features.gameId,
+    gameId: contextualFeatures.gameId,
     projection,
     picks: picks.sort((a, b) => b.edge - a.edge),
   };
@@ -229,6 +230,14 @@ function buildRationaleFacts(
 
   if (features.parkRunFactor !== undefined) {
     facts.push(`Park run factor ${features.parkRunFactor}`);
+  }
+
+  if (features.venueName !== undefined) {
+    facts.push(`Venue ${features.venueName}`);
+  }
+
+  if (features.parkFactorSource !== undefined) {
+    facts.push(features.parkFactorSource);
   }
 
   if (features.weatherRunImpact !== undefined) {

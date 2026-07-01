@@ -1,11 +1,13 @@
 import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "./modelConfig";
 import { americanToDecimal } from "./odds";
 import { type Pick } from "./picks";
+import { getGameMatchup } from "./ballparks";
 
 export type ParlayKind = "power-pair" | "value-three" | "ceiling-four";
 
 export type ParlayLeg = {
   pick: Pick;
+  matchup: string;
   reasoning: string[];
 };
 
@@ -74,6 +76,7 @@ function makeParlayCard(kind: ParlayKind, title: string, picks: Pick[]): ParlayC
     title,
     legs: picks.map((pick) => ({
       pick,
+      matchup: getGameMatchup(pick.featureSnapshot),
       reasoning: [...pick.rationaleFacts],
     })),
     combinedOdds,

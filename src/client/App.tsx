@@ -307,6 +307,7 @@ function ParlayCard({ parlay }: { parlay: (typeof sampleModelPreview.parlays)[nu
       <div className="leg-list">
         {parlay.legs.map((leg) => (
           <div className="leg" key={leg.pick.id}>
+            <span className="leg-game">{leg.matchup}</span>
             <strong>{leg.pick.label}</strong>
             <span>{leg.reasoning.slice(0, 2).join(" | ")}</span>
           </div>
