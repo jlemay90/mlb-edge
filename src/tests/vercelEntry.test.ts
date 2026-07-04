@@ -26,6 +26,17 @@ describe("Vercel API entrypoint", () => {
     expect(entrySource).toContain('../src/server/api.js');
   });
 
+  it("rewrites nested API paths to the Express catch-all function on Vercel", () => {
+    const vercelConfig = JSON.parse(readFileSync(resolve(process.cwd(), "vercel.json"), "utf8")) as {
+      rewrites?: Array<{ source: string; destination: string }>;
+    };
+
+    expect(vercelConfig.rewrites).toContainEqual({
+      source: "/api/:path*",
+      destination: "/api/[...path]",
+    });
+  });
+
   it("exports the Express API app for Vercel serverless routing", async () => {
     const module = await import("../../api/[...path]");
     const app = module.default as Express;
