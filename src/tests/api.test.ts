@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DEFAULT_MODEL_CONFIG } from "../domain/modelConfig";
 import { analyzeGame, type Pick } from "../domain/picks";
 import { type GameFeatures } from "../domain/projection";
@@ -69,12 +72,32 @@ async function request(app: ReturnType<typeof createApp>, path: string): Promise
   }
 }
 
+async function requestText(app: ReturnType<typeof createApp>, path: string): Promise<string> {
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>((resolve) => server.once("listening", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Expected an ephemeral TCP address");
+  }
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}${path}`);
+    return await response.text();
+  } finally {
+    server.close();
+  }
+}
+
 describe("persistence and API", () => {
   const dbs: Db[] = [];
+  const tempDirs: string[] = [];
 
   afterEach(() => {
     while (dbs.length > 0) {
       dbs.pop()!.close();
+    }
+    while (tempDirs.length > 0) {
+      rmSync(tempDirs.pop()!, { force: true, recursive: true });
     }
   });
 
@@ -99,6 +122,53 @@ describe("persistence and API", () => {
         "api_health",
       ])
     );
+  });
+
+  it("uses MLB_EDGE_DB_PATH for the default SQLite database path", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "mlb-edge-db-"));
+    tempDirs.push(tempDir);
+    const dbPath = join(tempDir, "runtime.sqlite");
+    const previous = process.env.MLB_EDGE_DB_PATH;
+    process.env.MLB_EDGE_DB_PATH = dbPath;
+
+    const db = createDatabase();
+    try {
+      expect(existsSync(dbPath)).toBe(true);
+    } finally {
+      db.close();
+      if (previous === undefined) {
+        delete process.env.MLB_EDGE_DB_PATH;
+      } else {
+        process.env.MLB_EDGE_DB_PATH = previous;
+      }
+    }
+  });
+
+  it("uses an ephemeral temp SQLite database path on Vercel", () => {
+    const dbPath = join(tmpdir(), "mlb-edge-lab.sqlite");
+    rmSync(dbPath, { force: true });
+    const previousVercel = process.env.VERCEL;
+    const previousDbPath = process.env.MLB_EDGE_DB_PATH;
+    process.env.VERCEL = "1";
+    delete process.env.MLB_EDGE_DB_PATH;
+
+    const db = createDatabase();
+    try {
+      expect(existsSync(dbPath)).toBe(true);
+    } finally {
+      db.close();
+      rmSync(dbPath, { force: true });
+      if (previousVercel === undefined) {
+        delete process.env.VERCEL;
+      } else {
+        process.env.VERCEL = previousVercel;
+      }
+      if (previousDbPath === undefined) {
+        delete process.env.MLB_EDGE_DB_PATH;
+      } else {
+        process.env.MLB_EDGE_DB_PATH = previousDbPath;
+      }
+    }
   });
 
   it("persists model versions and generated pick snapshots", () => {
@@ -155,6 +225,7 @@ describe("persistence and API", () => {
         openAiApiKey: "openai-secret-value",
         nwsUserAgent: "mlb-edge-lab/test",
       },
+      scheduleProvider: async () => ({ ok: true, data: [] }),
     });
 
     const today = (await request(app, "/api/today?date=2026-07-01")) as { picks: Pick[] };
@@ -167,6 +238,41 @@ describe("persistence and API", () => {
     expect(healthText).toContain("configured");
     expect(healthText).not.toContain("odds-secret-value");
     expect(healthText).not.toContain("openai-secret-value");
+  });
+
+  it("returns live schedule games on the today endpoint without inventing picks", async () => {
+    const db = migratedDb();
+    dbs.push(db);
+    const app = createApp({
+      db,
+      scheduleProvider: async (date) => ({
+        ok: true,
+        data: [
+          {
+            gameId: "824174",
+            gameDate: `${date}T20:10:00-04:00`,
+            status: "scheduled",
+            awayTeam: "Minnesota Twins",
+            homeTeam: "Houston Astros",
+            venue: "Daikin Park",
+          },
+        ],
+      }),
+    });
+
+    const today = (await request(app, "/api/today?date=2026-07-01")) as {
+      games: Array<{ awayTeam: string; homeTeam: string; venue?: string }>;
+      picks: Pick[];
+    };
+
+    expect(today.games).toEqual([
+      expect.objectContaining({
+        awayTeam: "Minnesota Twins",
+        homeTeam: "Houston Astros",
+        venue: "Daikin Park",
+      }),
+    ]);
+    expect(today.picks).toEqual([]);
   });
 
   it("exposes historical backtest readiness without claiming unverified success", async () => {
@@ -197,5 +303,116 @@ describe("persistence and API", () => {
     expect(historical.blockers.join(" ")).toContain("imported historical replay data");
     expect(responseText).not.toContain("odds-secret-value");
     expect(responseText).not.toContain("openai-secret-value");
+  });
+
+  it("checks historical odds access without returning the API key", async () => {
+    const db = migratedDb();
+    dbs.push(db);
+    const app = createApp({
+      db,
+      config: {
+        oddsApiKey: "odds-secret-value",
+      },
+      historicalOddsHealthCheck: async (_apiKey, snapshotDate) => ({
+        configured: true,
+        ok: true,
+        checkedAt: "2026-07-01T00:00:00Z",
+        snapshotDate,
+        eventCount: 12,
+      }),
+    });
+
+    const health = (await request(app, "/api/odds/historical-check?date=2025-07-01T16:00:00Z")) as {
+      configured: boolean;
+      ok: boolean;
+      eventCount: number;
+      snapshotDate: string;
+    };
+    const responseText = JSON.stringify(health);
+
+    expect(health).toMatchObject({
+      configured: true,
+      ok: true,
+      eventCount: 12,
+      snapshotDate: "2025-07-01T16:00:00Z",
+    });
+    expect(responseText).not.toContain("odds-secret-value");
+  });
+
+  it("checks live odds access without returning the API key", async () => {
+    const db = migratedDb();
+    dbs.push(db);
+    const app = createApp({
+      db,
+      config: {
+        oddsApiKey: "odds-secret-value",
+      },
+      liveOddsHealthCheck: async (_apiKey) => ({
+        configured: true,
+        ok: true,
+        checkedAt: "2026-07-01T00:00:00Z",
+        eventCount: 14,
+      }),
+    });
+
+    const health = (await request(app, "/api/odds/live-check")) as {
+      configured: boolean;
+      ok: boolean;
+      eventCount: number;
+    };
+    const responseText = JSON.stringify(health);
+
+    expect(health).toMatchObject({
+      configured: true,
+      ok: true,
+      eventCount: 14,
+    });
+    expect(responseText).not.toContain("odds-secret-value");
+  });
+
+  it("serves the built web app from the API process for production deploys", async () => {
+    const db = migratedDb();
+    dbs.push(db);
+    const staticDir = mkdtempSync(join(tmpdir(), "mlb-edge-dist-"));
+    tempDirs.push(staticDir);
+    writeFileSync(join(staticDir, "index.html"), "<!doctype html><title>MLB Edge Lab</title><main>built app</main>");
+    const app = createApp({ db, staticDir });
+
+    const html = await requestText(app, "/");
+
+    expect(html).toContain("MLB Edge Lab");
+    expect(html).toContain("built app");
+  });
+
+  it("serves a bundled import report fallback when local historical data is absent", async () => {
+    const db = migratedDb();
+    dbs.push(db);
+    const tempDir = mkdtempSync(join(tmpdir(), "mlb-edge-report-"));
+    tempDirs.push(tempDir);
+    const missingReportPath = join(tempDir, "missing-import-report.json");
+    const fallbackReportPath = join(tempDir, "snapshot-import-report.json");
+    writeFileSync(
+      fallbackReportPath,
+      JSON.stringify({
+        generatedAt: "2026-07-04T00:00:00.000Z",
+        seasons: [2020, 2021],
+        oddsApiConfigured: true,
+        requestedMarkets: ["h2h"],
+        maxOddsSnapshots: 0,
+        maxWeatherSnapshots: 0,
+        totals: { games: 1, featureDrafts: 1, weatherSnapshotsCached: 1 },
+        seasonReports: [],
+        blockers: [],
+      })
+    );
+    const app = createApp({ db, importReportPath: missingReportPath, importReportFallbackPath: fallbackReportPath });
+
+    const report = (await request(app, "/api/backtest/import-report")) as {
+      seasons: number[];
+      totals: { featureDrafts: number };
+    };
+
+    expect(report.seasons).toEqual([2020, 2021]);
+    expect(report.totals.featureDrafts).toBe(1);
   });
 });

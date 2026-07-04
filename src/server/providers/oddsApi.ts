@@ -90,18 +90,31 @@ async function fetchOddsEvents(
         ok: false,
         error: `${providerName} request failed with status ${response.status}`,
         status: response.status,
+        requestUsage: readRequestUsage(response.headers),
       };
     }
 
     const body = await response.json();
     const events = Array.isArray(body) ? body : ((body as { data?: unknown[] }).data ?? []);
-    return { ok: true, data: events.map(normalizeOddsEvent) };
+    return { ok: true, data: events.map(normalizeOddsEvent), requestUsage: readRequestUsage(response.headers) };
   } catch (error) {
     return {
       ok: false,
       error: `${providerName} request failed: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
+}
+
+function readRequestUsage(headers: Headers): {
+  requestsRemaining?: string;
+  requestsUsed?: string;
+  requestsLast?: string;
+} {
+  return {
+    requestsRemaining: headers.get("x-requests-remaining") ?? undefined,
+    requestsUsed: headers.get("x-requests-used") ?? undefined,
+    requestsLast: headers.get("x-requests-last") ?? undefined,
+  };
 }
 
 function normalizeOddsEvent(event: any): OddsEvent {

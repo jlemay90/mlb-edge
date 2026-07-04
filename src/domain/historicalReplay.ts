@@ -37,7 +37,7 @@ function buildBacktestPicksForGame(
   game: HistoricalGameReplayInput,
   modelConfig: ModelConfig
 ): BacktestPick[] {
-  if (!game.featureSnapshot || !game.finalResult) {
+  if (!hasCompleteFeatureSnapshot(game.featureSnapshot) || !game.finalResult) {
     return [];
   }
 
@@ -80,7 +80,7 @@ function buildCoverage(games: HistoricalGameReplayInput[]): HistoricalSeasonCove
   const oddsSnapshots = games.filter((game) => game.oddsSnapshotAvailable ?? hasOddsInSnapshot(game.featureSnapshot)).length;
   const weatherSnapshots = games.filter((game) => game.weatherSnapshotAvailable ?? game.featureSnapshot?.weatherRunImpact !== undefined).length;
   const parkFactors = games.filter((game) => game.parkFactorAvailable ?? game.featureSnapshot?.parkRunFactor !== undefined).length;
-  const featureSnapshots = games.filter((game) => game.featureSnapshot !== undefined).length;
+  const featureSnapshots = games.filter((game) => hasCompleteFeatureSnapshot(game.featureSnapshot)).length;
 
   return {
     scheduledGames,
@@ -160,5 +160,40 @@ function hasOddsInSnapshot(features: GameFeatures | undefined): boolean {
     features?.underOdds !== undefined ||
     features?.homeRunLineOdds !== undefined ||
     features?.awayRunLineOdds !== undefined
+  );
+}
+
+function hasCompleteFeatureSnapshot(features: GameFeatures | undefined): features is GameFeatures {
+  if (!features) {
+    return false;
+  }
+
+  const requiredTextFields = [features.gameId, features.date, features.homeTeam, features.awayTeam];
+  const requiredNumberFields = [
+    features.homeMoneyline,
+    features.awayMoneyline,
+    features.total,
+    features.overOdds,
+    features.underOdds,
+    features.runLine,
+    features.homeRunLineOdds,
+    features.awayRunLineOdds,
+    features.homeWrcPlus,
+    features.awayWrcPlus,
+    features.homeStarterFip,
+    features.awayStarterFip,
+    features.homeBullpenRest,
+    features.awayBullpenRest,
+    features.parkRunFactor,
+    features.weatherRunImpact,
+    features.homeRecentForm,
+    features.awayRecentForm,
+  ];
+
+  return (
+    requiredTextFields.every((value) => value.trim().length > 0) &&
+    requiredNumberFields.every((value) => typeof value === "number" && Number.isFinite(value)) &&
+    typeof features.homeLineupConfirmed === "boolean" &&
+    typeof features.awayLineupConfirmed === "boolean"
   );
 }

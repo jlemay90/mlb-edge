@@ -10,11 +10,113 @@ import {
   Table2,
   TrendingUp,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { buildPickExplanation } from "../domain/explanations";
 import { sampleModelPreview } from "../domain/sampleData";
 import { type Pick } from "../domain/picks";
 
 type View = "Today" | "Parlays" | "Grading" | "Backtest" | "Model Lab" | "Data Health";
+type TodayGame = {
+  gameId: string;
+  gameDate: string;
+  status: string;
+  homeTeam: string;
+  awayTeam: string;
+  venue?: string;
+  homeProbablePitcher?: string;
+  awayProbablePitcher?: string;
+};
+type TodayApiResponse = {
+  date: string;
+  games: TodayGame[];
+  picks: Pick[];
+  modelVersion: string;
+  scheduleError?: string;
+};
+type ApiHealthSource = {
+  name: string;
+  status: string;
+  requiresKey: boolean;
+};
+type DataHealthResponse = {
+  sources: ApiHealthSource[];
+};
+type HistoricalOddsHealth = {
+  configured: boolean;
+  ok: boolean;
+  checkedAt: string;
+  snapshotDate: string;
+  eventCount: number;
+  status?: number;
+  requestUsage?: {
+    requestsRemaining?: string;
+    requestsUsed?: string;
+    requestsLast?: string;
+  };
+  error?: string;
+};
+type LiveOddsHealth = Omit<HistoricalOddsHealth, "snapshotDate">;
+type HistoricalImportReport = {
+  generatedAt: string;
+  seasons: number[];
+  oddsApiConfigured: boolean;
+  maxOddsSnapshots: number;
+  maxOddsApiCredits?: number | null;
+  maxWeatherSnapshots?: number | null;
+  maxPitcherLogRequests?: number | null;
+  apiCallLedgerPath?: string;
+  totals: {
+    games: number;
+    finalResults: number;
+    venueContexts: number;
+    estimatedPregameOddsSnapshots: number;
+    oddsSnapshotsCached: number;
+    oddsSnapshotsChecked: number;
+    oddsApiRequestsMade?: number;
+    oddsApiCreditsSpent?: number;
+    oddsSnapshotsFullMarket: number;
+    oddsSnapshotsMoneylineOnly: number;
+    oddsEventsSeen: number;
+    weatherSnapshotsCached: number;
+    weatherSnapshotsChecked: number;
+    weatherSnapshotsFailed: number;
+    pitcherLogsCached?: number;
+    pitcherLogsChecked?: number;
+    pitcherLogsFailed?: number;
+    featureSnapshotCandidates: number;
+    featureDrafts: number;
+    featureDraftMissingSignals: Record<string, number>;
+    featureSnapshots: number;
+  };
+  seasonReports: Array<{
+    season: number;
+    status: string;
+    games: number;
+    finalResults: number;
+    venueContexts: number;
+    estimatedPregameOddsSnapshots: number;
+    oddsSnapshotsCached: number;
+    oddsSnapshotsChecked: number;
+    oddsApiRequestsMade?: number;
+    oddsApiCreditsSpent?: number;
+    oddsSnapshotsFullMarket: number;
+    oddsSnapshotsMoneylineOnly: number;
+    oddsEventsSeen: number;
+    weatherSnapshotsCached: number;
+    weatherSnapshotsChecked: number;
+    weatherSnapshotsFailed: number;
+    pitcherLogsCached?: number;
+    pitcherLogsChecked?: number;
+    pitcherLogsFailed?: number;
+    featureSnapshotCandidates: number;
+    featureDrafts: number;
+    featureDraftMissingSignals: Record<string, number>;
+    nextOddsSnapshotTimes: string[];
+    featureSnapshots: number;
+    blockers: string[];
+  }>;
+  blockers: string[];
+};
 
 const navItems: Array<{ label: View; icon: typeof Table2 }> = [
   { label: "Today", icon: Table2 },
@@ -27,11 +129,70 @@ const navItems: Array<{ label: View; icon: typeof Table2 }> = [
 
 export function App() {
   const [view, setView] = useState<View>("Today");
-  const [selectedPickId, setSelectedPickId] = useState(sampleModelPreview.picks[0]?.id ?? "");
+  const [todayData, setTodayData] = useState<TodayApiResponse | null>(null);
+  const [todayError, setTodayError] = useState("");
+  const [apiSources, setApiSources] = useState<ApiHealthSource[]>([]);
+  const [selectedPickId, setSelectedPickId] = useState("");
+  const [requestDate, setRequestDate] = useState(initialSlateDate);
+  const livePicks = todayData?.picks ?? [];
+  const availableSourceCount = apiSources.filter((source) => isSourceAvailable(source.status)).length;
   const selectedPick = useMemo(
-    () => sampleModelPreview.picks.find((pick) => pick.id === selectedPickId) ?? sampleModelPreview.picks[0],
-    [selectedPickId]
+    () => livePicks.find((pick) => pick.id === selectedPickId) ?? livePicks[0],
+    [livePicks, selectedPickId]
   );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    fetch("/api/data-health")
+      .then(async (response) => {
+        const body = (await response.json()) as DataHealthResponse;
+        if (isMounted && response.ok) {
+          setApiSources(body.sources);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setApiSources([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    setTodayData(null);
+    setTodayError("");
+    fetch(`/api/today?date=${requestDate}`)
+      .then(async (response) => {
+        const body = (await response.json()) as TodayApiResponse;
+        if (isMounted) {
+          setTodayData(body);
+          setTodayError(response.ok ? "" : body.scheduleError ?? `HTTP ${response.status}`);
+          setSelectedPickId(body.picks[0]?.id ?? "");
+        }
+      })
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setTodayError(error instanceof Error ? error.message : "Today slate failed to load.");
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [requestDate]);
+
+  function updateRequestDate(date: string): void {
+    setRequestDate(date);
+    const url = new URL(window.location.href);
+    url.searchParams.set("date", date);
+    window.history.replaceState(null, "", url);
+  }
 
   return (
     <main className="app-shell">
@@ -71,18 +232,33 @@ export function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="meta-label">{sampleModelPreview.date}</p>
+            <p className="meta-label">{todayData?.date ?? requestDate}</p>
             <h2>{view === "Today" ? "Daily Model Preview" : view}</h2>
           </div>
           <div className="topbar-actions" aria-label="Model status">
-            <span>Model v1.0.0</span>
-            <span>{sampleModelPreview.picks.length} qualified picks</span>
-            <span>{sampleModelPreview.apiHealth.filter((item) => item.status !== "Missing").length}/5 sources</span>
+            <label className="date-control">
+              <span>Slate date</span>
+              <input
+                type="date"
+                value={requestDate}
+                onChange={(event) => updateRequestDate(event.currentTarget.value)}
+              />
+            </label>
+            <span>Model {todayData?.modelVersion ?? "v1.0.0"}</span>
+            <span>{livePicks.length} qualified picks</span>
+            <span>{apiSources.length > 0 ? `${availableSourceCount}/${apiSources.length} sources` : "sources checking"}</span>
           </div>
         </header>
 
-        {view === "Today" && selectedPick && (
-          <TodayView selectedPick={selectedPick} onSelectPick={setSelectedPickId} />
+        {view === "Today" && (
+          <TodayView
+            games={todayData?.games ?? []}
+            loading={!todayData && !todayError}
+            picks={livePicks}
+            scheduleError={todayData?.scheduleError ?? todayError}
+            selectedPick={selectedPick}
+            onSelectPick={setSelectedPickId}
+          />
         )}
         {view === "Parlays" && <ParlaysView />}
         {view === "Grading" && <GradingView />}
@@ -95,18 +271,64 @@ export function App() {
 }
 
 function TodayView({
+  games,
+  loading,
+  picks,
+  scheduleError,
   selectedPick,
   onSelectPick,
 }: {
-  selectedPick: Pick;
+  games: TodayGame[];
+  loading: boolean;
+  picks: Pick[];
+  scheduleError?: string;
+  selectedPick: Pick | undefined;
   onSelectPick: (id: string) => void;
 }) {
-  const explanation = sampleModelPreview.explanations[selectedPick.id];
+  if (picks.length === 0) {
+    return (
+      <div className="dashboard-grid">
+        <section className="panel slate-panel">
+          <PanelTitle icon={Activity} title="Official MLB Schedule" detail="MLB Stats API" />
+          {scheduleError && <div className="warning-list"><span>{scheduleError}</span></div>}
+          <ScheduleTable games={games} loading={loading} />
+        </section>
+
+        <section className="panel">
+          <PanelTitle icon={TrendingUp} title="Model Picks" detail="stored picks only" />
+          <p className="muted-copy">No qualified model picks stored for this slate.</p>
+        </section>
+
+        <section className="panel">
+          <PanelTitle icon={HeartPulse} title="Live Inputs" detail="current status" />
+          <div className="health-grid">
+            <div className="health-item">
+              <div>
+                <strong>Schedule</strong>
+                <span>{games.length} official games loaded</span>
+              </div>
+              <span>{scheduleError ? "blocked" : loading ? "checking" : "live"}</span>
+            </div>
+            <div className="health-item">
+              <div>
+                <strong>Stored Picks</strong>
+                <span>{picks.length} picks returned by the API</span>
+              </div>
+              <span>{picks.length > 0 ? "ready" : "empty"}</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  const activePick = selectedPick ?? picks[0]!;
+  const activeExplanation = buildPickExplanation(activePick);
 
   return (
     <div className="dashboard-grid">
       <section className="panel slate-panel">
-        <PanelTitle icon={Activity} title="Qualified Slate" detail="sorted by model edge" />
+        <PanelTitle icon={Activity} title="Qualified Slate" detail="stored model picks" />
         <div className="table-wrap">
           <table>
             <thead>
@@ -120,10 +342,10 @@ function TodayView({
               </tr>
             </thead>
             <tbody>
-              {sampleModelPreview.picks.map((pick) => (
+              {picks.map((pick) => (
                 <tr
                   key={pick.id}
-                  className={pick.id === selectedPick.id ? "selected" : ""}
+                  className={pick.id === activePick.id ? "selected" : ""}
                   onClick={() => onSelectPick(pick.id)}
                 >
                   <td>
@@ -145,35 +367,75 @@ function TodayView({
       </section>
 
       <section className="panel pick-detail">
-        <PanelTitle icon={TrendingUp} title={selectedPick.label} detail="why this makes sense" />
-        <div className="scoreline">{explanation.projectedScore}</div>
-        <p className="model-narrative">{explanation.narrative}</p>
+        <PanelTitle icon={TrendingUp} title={activePick.label} detail="why this makes sense" />
+        <div className="scoreline">{activeExplanation.projectedScore}</div>
+        <p className="model-narrative">{activeExplanation.narrative}</p>
         <div className="metric-row">
-          <Metric label="Model" value={`${explanation.metrics.modelProbabilityPct.toFixed(1)}%`} />
-          <Metric label="Market" value={`${explanation.metrics.marketProbabilityPct.toFixed(1)}%`} />
-          <Metric label="Edge" value={`${explanation.metrics.edgePct.toFixed(1)}%`} tone="gold" />
+          <Metric label="Model" value={`${activeExplanation.metrics.modelProbabilityPct.toFixed(1)}%`} />
+          <Metric label="Market" value={`${activeExplanation.metrics.marketProbabilityPct.toFixed(1)}%`} />
+          <Metric label="Edge" value={`${activeExplanation.metrics.edgePct.toFixed(1)}%`} tone="gold" />
         </div>
         <div className="signal-list">
-          {explanation.keySignals.map((signal) => (
+          {activeExplanation.keySignals.map((signal) => (
             <span key={signal}>{signal}</span>
           ))}
         </div>
         <div className="warning-list">
-          {explanation.warnings.map((warning) => (
+          {activeExplanation.warnings.map((warning) => (
             <span key={warning}>{warning}</span>
           ))}
         </div>
       </section>
 
       <section className="panel">
-        <PanelTitle icon={ListChecks} title="Top Parlay" detail="qualified legs only" />
-        <ParlayCard parlay={sampleModelPreview.parlays[0]} />
+        <PanelTitle icon={Activity} title="Official MLB Schedule" detail="MLB Stats API" />
+        <ScheduleTable games={games} loading={loading} />
       </section>
 
       <section className="panel">
         <PanelTitle icon={LineChart} title="Backtest Snapshot" detail="seeded replay" />
         <BacktestMetrics compact />
       </section>
+    </div>
+  );
+}
+
+function ScheduleTable({ games, loading }: { games: TodayGame[]; loading: boolean }) {
+  if (loading) {
+    return <p className="muted-copy">Loading official MLB schedule.</p>;
+  }
+
+  if (games.length === 0) {
+    return <p className="muted-copy">No official games returned for this date.</p>;
+  }
+
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Game</th>
+            <th>First Pitch</th>
+            <th>Venue</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {games.map((game) => (
+            <tr key={game.gameId}>
+              <td>
+                <div className="row-pick">
+                  <strong>{game.awayTeam} at {game.homeTeam}</strong>
+                  <span>{pitcherLine(game)}</span>
+                </div>
+              </td>
+              <td>{formatFirstPitch(game.gameDate)}</td>
+              <td>{game.venue ?? "TBD"}</td>
+              <td>{game.status}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -211,54 +473,169 @@ function GradingView() {
 
 function BacktestView() {
   const historical = sampleModelPreview.historicalBacktest;
+  const [importReport, setImportReport] = useState<HistoricalImportReport | null>(null);
+  const [importError, setImportError] = useState("");
+  const missingFeatureSignals = importReport
+    ? topMissingFeatureSignals(importReport.totals.featureDraftMissingSignals ?? {})
+    : [];
+
+  useEffect(() => {
+    let isMounted = true;
+
+    fetch("/api/backtest/import-report")
+      .then(async (response) => {
+        const body = await response.json();
+        if (isMounted) {
+          if (response.ok) {
+            setImportReport(body as HistoricalImportReport);
+            setImportError("");
+          } else {
+            setImportError((body as { error?: string }).error ?? `HTTP ${response.status}`);
+          }
+        }
+      })
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setImportError(error instanceof Error ? error.message : "Import report unavailable.");
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="dashboard-grid two-col">
       <section className="panel">
-        <PanelTitle icon={BarChart3} title="Backtest Summary" detail="220 pick replay" />
-        <BacktestMetrics />
+        <PanelTitle
+          icon={BarChart3}
+          title={importReport ? "Import Summary" : "Backtest Summary"}
+          detail={importReport ? "real MLB API coverage" : "demo replay"}
+        />
+        {importReport ? (
+          <div className="metrics-grid">
+            <Metric label="Games" value={String(importReport.totals.games)} />
+            <Metric label="Results" value={String(importReport.totals.finalResults)} />
+            <Metric label="Est. odds snapshots" value={String(importReport.totals.estimatedPregameOddsSnapshots)} />
+            <Metric label="Cached odds" value={String(importReport.totals.oddsSnapshotsCached)} />
+            <Metric label="Odds checked" value={String(importReport.totals.oddsSnapshotsChecked)} />
+            <Metric label="API calls" value={String(importReport.totals.oddsApiRequestsMade ?? 0)} />
+            <Metric label="API credits" value={String(importReport.totals.oddsApiCreditsSpent ?? 0)} />
+            <Metric label="Full markets" value={String(importReport.totals.oddsSnapshotsFullMarket)} />
+            <Metric label="ML only" value={String(importReport.totals.oddsSnapshotsMoneylineOnly)} />
+            <Metric label="Weather" value={`${importReport.totals.weatherSnapshotsCached ?? 0}/${importReport.totals.featureDrafts ?? 0}`} />
+            <Metric label="Pitcher logs" value={String((importReport.totals.pitcherLogsCached ?? 0) + (importReport.totals.pitcherLogsChecked ?? 0))} />
+            <Metric label="Matched games" value={String(importReport.totals.featureSnapshotCandidates)} />
+            <Metric label="Feature drafts" value={String(importReport.totals.featureDrafts ?? 0)} />
+          </div>
+        ) : (
+          <BacktestMetrics />
+        )}
       </section>
       <section className="panel">
-        <PanelTitle icon={LineChart} title="Equity Shape" detail="drawdown and CLV checks" />
-        <div className="equity-chart" aria-label="Equity curve preview">
-          {Array.from({ length: 24 }, (_, index) => (
-            <span key={index} style={{ height: `${32 + ((index * 17) % 58)}%` }} />
-          ))}
-        </div>
-        <p className="muted-copy">
-          Backtests report ROI, units, closing-line value coverage, and max drawdown. Missing CLV is marked instead of invented.
-        </p>
+        <PanelTitle
+          icon={LineChart}
+          title={importReport ? "Replay Status" : "Equity Shape"}
+          detail={importReport ? "waiting on odds and features" : "demo drawdown and CLV checks"}
+        />
+        {importReport ? (
+          <>
+            <p className="muted-copy">
+              Equity, ROI, CLV, and win rate stay locked until historical odds and frozen pregame feature snapshots are imported.
+            </p>
+            <div className="signal-list">
+              {missingFeatureSignals.length > 0 ? (
+                missingFeatureSignals.map(([signal, count]) => (
+                  <span key={signal}>{signal}: {count}</span>
+                ))
+              ) : (
+                <span>No matched feature drafts yet</span>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="equity-chart" aria-label="Equity curve preview">
+              {Array.from({ length: 24 }, (_, index) => (
+                <span key={index} style={{ height: `${32 + ((index * 17) % 58)}%` }} />
+              ))}
+            </div>
+            <p className="muted-copy">
+              Backtests report ROI, units, closing-line value coverage, and max drawdown. Missing CLV is marked instead of invented.
+            </p>
+          </>
+        )}
       </section>
       <section className="panel wide-panel">
         <PanelTitle
           icon={ShieldCheck}
-          title="Historical 5-Season Status"
-          detail={`${historical.seasons[0]}-${historical.seasons[historical.seasons.length - 1]}`}
+          title={importReport ? "Historical Import Coverage" : "Historical 5-Season Status"}
+          detail={importReport ? importReport.seasons.join(", ") : `${historical.seasons[0]}-${historical.seasons[historical.seasons.length - 1]}`}
         />
-        <div className="metric-row compact">
-          <Metric label="Status" value={historical.status} tone={historical.status === "verified" ? "gold" : undefined} />
-          <Metric label="Complete" value={`${historical.completedSeasonCount}/${historical.requiredSeasonCount}`} />
-          <Metric label="Picks" value={String(historical.summary.totalPicks)} />
-        </div>
-        <div className="coverage-grid">
-          {historical.coverage.map((season) => (
-            <div className="coverage-row" key={season.season}>
-              <strong>{season.season}</strong>
-              <span>{season.complete ? "complete" : "missing data"}</span>
-              <span>{season.oddsSnapshots} odds</span>
-              <span>{season.finalResults} finals</span>
-              <span>{season.weatherSnapshots} weather</span>
+        {importReport ? (
+          <>
+            <div className="metric-row compact">
+              <Metric label="Games" value={String(importReport.totals.games)} />
+              <Metric label="Results" value={String(importReport.totals.finalResults)} />
+              <Metric label="Odds" value={`${importReport.totals.oddsSnapshotsCached + importReport.totals.oddsSnapshotsChecked}/${importReport.totals.estimatedPregameOddsSnapshots}`} />
+              <Metric label="Credits" value={String(importReport.totals.oddsApiCreditsSpent ?? 0)} />
             </div>
-          ))}
-        </div>
-        <div className="warning-list">
-          {historical.blockers.slice(0, 3).map((blocker) => (
-            <span key={blocker}>{blocker}</span>
-          ))}
-        </div>
+            <div className="coverage-grid">
+              {importReport.seasonReports.map((season) => (
+                <div className="coverage-row" key={season.season}>
+                  <strong>{season.season}</strong>
+                  <span>{season.status}</span>
+                  <span>{season.games} games</span>
+                  <span>{season.finalResults} results</span>
+                  <span>{season.featureDrafts ?? season.featureSnapshotCandidates} drafts</span>
+                </div>
+              ))}
+            </div>
+            <div className="warning-list">
+              {importReport.blockers.slice(0, 4).map((blocker) => (
+                <span key={blocker}>{blocker}</span>
+              ))}
+            </div>
+            <div className="signal-list">
+              {importReport.seasonReports
+                .find((season) => season.nextOddsSnapshotTimes.length > 0)
+                ?.nextOddsSnapshotTimes.map((snapshotTime) => (
+                  <span key={snapshotTime}>Next odds snapshot: {snapshotTime}</span>
+                ))}
+            </div>
+          </>
+        ) : (
+          <>
+            {importError && <div className="warning-list"><span>{importError}</span></div>}
+            <div className="metric-row compact">
+              <Metric label="Status" value={historical.status} tone={historical.status === "verified" ? "gold" : undefined} />
+              <Metric label="Complete" value={`${historical.completedSeasonCount}/${historical.requiredSeasonCount}`} />
+              <Metric label="Picks" value={String(historical.summary.totalPicks)} />
+            </div>
+            <div className="coverage-grid">
+              {historical.coverage.map((season) => (
+                <div className="coverage-row" key={season.season}>
+                  <strong>{season.season}</strong>
+                  <span>{season.complete ? "complete" : "missing data"}</span>
+                  <span>{season.oddsSnapshots} odds</span>
+                  <span>{season.finalResults} finals</span>
+                  <span>{season.weatherSnapshots} weather</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </section>
     </div>
   );
+}
+
+function topMissingFeatureSignals(signalCounts: Record<string, number>): Array<[string, number]> {
+  return Object.entries(signalCounts)
+    .filter(([, count]) => count > 0)
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, 8);
 }
 
 function ModelLabView() {
@@ -297,19 +674,103 @@ function ModelLabView() {
 }
 
 function DataHealthView() {
+  const [sources, setSources] = useState<ApiHealthSource[]>([]);
+  const [sourcesError, setSourcesError] = useState("");
+  const [historicalOdds, setHistoricalOdds] = useState<HistoricalOddsHealth | null>(null);
+  const [historicalOddsError, setHistoricalOddsError] = useState("");
+  const [liveOdds, setLiveOdds] = useState<LiveOddsHealth | null>(null);
+  const [liveOddsError, setLiveOddsError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    fetch("/api/data-health")
+      .then(async (response) => {
+        const body = (await response.json()) as DataHealthResponse;
+        if (isMounted) {
+          setSources(response.ok ? body.sources : []);
+          setSourcesError(response.ok ? "" : `HTTP ${response.status}`);
+        }
+      })
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setSourcesError(error instanceof Error ? error.message : "Data health check failed.");
+        }
+      });
+
+    fetch("/api/odds/live-check")
+      .then(async (response) => {
+        const body = (await response.json()) as LiveOddsHealth;
+        if (isMounted) {
+          setLiveOdds(body);
+          setLiveOddsError(response.ok ? "" : body.error ?? `HTTP ${response.status}`);
+        }
+      })
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setLiveOddsError(error instanceof Error ? error.message : "Live odds check failed.");
+        }
+      });
+
+    fetch("/api/odds/historical-check")
+      .then(async (response) => {
+        const body = (await response.json()) as HistoricalOddsHealth;
+        if (isMounted) {
+          setHistoricalOdds(body);
+          setHistoricalOddsError(response.ok ? "" : body.error ?? `HTTP ${response.status}`);
+        }
+      })
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setHistoricalOddsError(error instanceof Error ? error.message : "Historical odds check failed.");
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <section className="panel">
       <PanelTitle icon={HeartPulse} title="Data Health" detail="secrets never displayed" />
       <div className="health-grid">
-        {sampleModelPreview.apiHealth.map((source) => (
+        {sources.length === 0 && (
+          <div className="health-item">
+            <div>
+              <strong>Local API</strong>
+              <span>{sourcesError || "Checking configured data sources."}</span>
+            </div>
+            <span>{sourcesError ? "error" : "checking"}</span>
+          </div>
+        )}
+        {sources.map((source) => (
           <div className="health-item" key={source.name}>
             <div>
               <strong>{source.name}</strong>
-              <span>{source.detail}</span>
+              <span>{sourceDetail(source)}</span>
             </div>
             <span>{source.status}</span>
           </div>
         ))}
+      </div>
+      <div className="live-health">
+        <div>
+          <strong>Live Odds Access</strong>
+          <span>{liveOddsDetail(liveOdds, liveOddsError)}</span>
+        </div>
+        <span className={`result-pill ${oddsHealthTone(liveOdds, liveOddsError)}`}>
+          {oddsHealthStatus(liveOdds, liveOddsError)}
+        </span>
+      </div>
+      <div className="live-health">
+        <div>
+          <strong>Historical Odds Access</strong>
+          <span>{historicalOddsDetail(historicalOdds, historicalOddsError)}</span>
+        </div>
+        <span className={`result-pill ${oddsHealthTone(historicalOdds, historicalOddsError)}`}>
+          {oddsHealthStatus(historicalOdds, historicalOddsError)}
+        </span>
       </div>
     </section>
   );
@@ -398,4 +859,114 @@ function formatPct(value: number): string {
 
 function formatOdds(odds: number): string {
   return `${odds > 0 ? "+" : ""}${odds}`;
+}
+
+function localTodayIsoDate(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function initialSlateDate(): string {
+  const date = new URLSearchParams(window.location.search).get("date");
+
+  return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : localTodayIsoDate();
+}
+
+function formatFirstPitch(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "TBD";
+  }
+
+  return date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function pitcherLine(game: TodayGame): string {
+  if (!game.awayProbablePitcher && !game.homeProbablePitcher) {
+    return game.venue ?? "";
+  }
+
+  return `${game.awayProbablePitcher ?? "TBD"} vs ${game.homeProbablePitcher ?? "TBD"}`;
+}
+
+function oddsHealthStatus(health: LiveOddsHealth | HistoricalOddsHealth | null, error: string): string {
+  if (error && !health) return "error";
+  if (!health) return "checking";
+  if (health.ok) return "connected";
+  if (!health.configured) return "missing key";
+  return "blocked";
+}
+
+function oddsHealthTone(health: LiveOddsHealth | HistoricalOddsHealth | null, error: string): string {
+  if (!health && !error) return "push";
+  return health?.ok ? "win" : "loss";
+}
+
+function isSourceAvailable(status: string): boolean {
+  return !status.toLowerCase().startsWith("missing");
+}
+
+function sourceDetail(source: ApiHealthSource): string {
+  if (source.name === "MLB Stats API") return "Schedules, venues, and final scores.";
+  if (source.name === "The Odds API") return "Current odds and paid historical lines.";
+  if (source.name === "National Weather Service") return "U.S. stadium hourly weather.";
+  if (source.name === "Open-Meteo") return "Weather fallback when NWS is unavailable.";
+  if (source.name === "OpenAI") return "Optional narrative explanations.";
+  return source.requiresKey ? "Requires a local key." : "No paid key required.";
+}
+
+function liveOddsDetail(health: LiveOddsHealth | null, error: string): string {
+  if (error && !health) {
+    return error;
+  }
+
+  if (!health) {
+    return "Checking current MLB odds through the local API.";
+  }
+
+  if (health.ok) {
+    return `${health.eventCount} current MLB events returned.`;
+  }
+
+  const status = health.status ? ` Status ${health.status}.` : "";
+  return `${health.error ?? "Live odds check failed."}${status}${quotaDetail(health)}`;
+}
+
+function historicalOddsDetail(health: HistoricalOddsHealth | null, error: string): string {
+  if (error && !health) {
+    return error;
+  }
+
+  if (!health) {
+    return "Checking the paid historical endpoint through the local API.";
+  }
+
+  if (health.ok) {
+    return `${health.eventCount} events returned for ${health.snapshotDate}.`;
+  }
+
+  const status = health.status ? ` Status ${health.status}.` : "";
+  return `${health.error ?? "Historical odds check failed."}${status}${quotaDetail(health)}`;
+}
+
+function quotaDetail(health: LiveOddsHealth | HistoricalOddsHealth): string {
+  const usage = health.requestUsage;
+  if (!usage?.requestsRemaining && !usage?.requestsUsed) {
+    return "";
+  }
+
+  const parts = [
+    usage.requestsRemaining ? ` remaining ${usage.requestsRemaining}` : undefined,
+    usage.requestsUsed ? ` used ${usage.requestsUsed}` : undefined,
+    usage.requestsLast ? ` last ${usage.requestsLast}` : undefined,
+  ].filter((part): part is string => Boolean(part));
+
+  return ` Quota:${parts.join(",")}.`;
 }

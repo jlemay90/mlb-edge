@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fetchFinalScores, fetchMlbSchedule } from "../server/providers/mlbStats";
+import { fetchFinalScores, fetchMlbPitcherGameLog, fetchMlbSchedule } from "../server/providers/mlbStats";
 import { fetchHistoricalMlbOdds, fetchMlbOdds } from "../server/providers/oddsApi";
 import { fetchGameWeather, fetchHistoricalGameWeather } from "../server/providers/weather";
 
@@ -8,10 +8,16 @@ type FetchCall = {
   init?: RequestInit;
 };
 
-function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 500): Response {
+function jsonResponse(
+  body: unknown,
+  ok = true,
+  status = ok ? 200 : 500,
+  headers: Record<string, string> = {}
+): Response {
   return {
     ok,
     status,
+    headers: new Headers(headers),
     json: async () => body,
     text: async () => JSON.stringify(body),
   } as Response;
@@ -30,7 +36,17 @@ describe("MLB Stats provider", () => {
                 gamePk: 123,
                 gameDate: "2026-07-01T23:05:00Z",
                 status: { abstractGameState: "Preview", detailedState: "Scheduled" },
-                venue: { name: "Yankee Stadium" },
+                venue: {
+                  id: 3313,
+                  name: "Yankee Stadium",
+                  location: {
+                    defaultCoordinates: {
+                      latitude: 40.82919482,
+                      longitude: -73.9264977,
+                    },
+                    azimuthAngle: 75,
+                  },
+                },
                 teams: {
                   home: {
                     team: { id: 147, name: "New York Yankees" },
@@ -59,8 +75,70 @@ describe("MLB Stats provider", () => {
       homeTeam: "New York Yankees",
       awayTeam: "Baltimore Orioles",
       venue: "Yankee Stadium",
+      venueId: "3313",
+      venueLatitude: 40.82919482,
+      venueLongitude: -73.9264977,
+      venueAzimuthAngle: 75,
+      homeProbablePitcherId: 1,
+      homeProbablePitcher: "Home Starter",
+      awayProbablePitcherId: 2,
+      awayProbablePitcher: "Away Starter",
       status: "scheduled",
     });
+  });
+
+  it("requests and normalizes MLB pitcher game logs for starter history", async () => {
+    const calls: FetchCall[] = [];
+    const result = await fetchMlbPitcherGameLog(673540, 2023, async (url, init) => {
+      calls.push({ url, init });
+      return jsonResponse({
+        stats: [
+          {
+            splits: [
+              {
+                season: "2023",
+                date: "2023-04-02",
+                player: { id: 673540, fullName: "Kodai Senga" },
+                game: { gamePk: 718741 },
+                stat: {
+                  gamesStarted: 1,
+                  outs: 16,
+                  inningsPitched: "5.1",
+                  homeRuns: 0,
+                  strikeOuts: 8,
+                  baseOnBalls: 3,
+                  hitByPitch: 0,
+                  earnedRuns: 1,
+                },
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]!.url).toContain("/api/v1/people/673540/stats");
+    expect(calls[0]!.url).toContain("stats=gameLog");
+    expect(calls[0]!.url).toContain("group=pitching");
+    expect(calls[0]!.url).toContain("season=2023");
+    expect(result.ok && result.data).toEqual([
+      {
+        playerId: 673540,
+        playerName: "Kodai Senga",
+        season: 2023,
+        gamePk: 718741,
+        date: "2023-04-02",
+        gamesStarted: 1,
+        outs: 16,
+        inningsPitched: "5.1",
+        homeRuns: 0,
+        strikeOuts: 8,
+        baseOnBalls: 3,
+        hitByPitch: 0,
+        earnedRuns: 1,
+      },
+    ]);
   });
 
   it("normalizes final scores and voidable statuses", async () => {
@@ -200,6 +278,31 @@ describe("Odds API provider", () => {
     expect(result.ok).toBe(true);
     expect(calls[0]!.url).toContain("/v4/historical/sports/baseball_mlb/odds");
     expect(calls[0]!.url).toContain("date=2026-06-15T16%3A00%3A00Z");
+  });
+
+  it("returns request usage headers on Odds API failures", async () => {
+    const result = await fetchMlbOdds({
+      apiKey: "test-key",
+      fetchImpl: async () =>
+        jsonResponse(
+          { message: "quota exceeded" },
+          false,
+          401,
+          {
+            "x-requests-remaining": "0",
+            "x-requests-used": "20000",
+            "x-requests-last": "0",
+          }
+        ),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.status).toBe(401);
+    expect(result.requestUsage).toEqual({
+      requestsRemaining: "0",
+      requestsUsed: "20000",
+      requestsLast: "0",
+    });
   });
 });
 

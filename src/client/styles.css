@@ -173,7 +173,8 @@ button {
   gap: 8px;
 }
 
-.topbar-actions span {
+.topbar-actions > span,
+.date-control {
   min-height: 32px;
   border: 1px solid rgba(244, 241, 232, 0.13);
   border-radius: 7px;
@@ -182,6 +183,30 @@ button {
   color: #d8ded8;
   font-size: 12px;
   font-weight: 750;
+}
+
+.date-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-control span {
+  color: #a9b0aa;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.date-control input {
+  border: 0;
+  background: transparent;
+  color: #f4f1e8;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  outline: none;
 }
 
 .dashboard-grid {
@@ -433,7 +458,8 @@ tr:hover {
 .grading-row,
 .bucket-row,
 .recommendation,
-.health-item {
+.health-item,
+.live-health {
   min-width: 0;
 }
 
@@ -441,6 +467,7 @@ tr:hover {
 .grading-row,
 .bucket-row,
 .health-item,
+.live-health,
 .coverage-row {
   display: flex;
   align-items: center;
@@ -461,6 +488,7 @@ tr:hover {
 .grading-row,
 .recommendation,
 .health-item,
+.live-health,
 .coverage-row {
   border-top: 1px solid rgba(244, 241, 232, 0.08);
   padding-top: 10px;
@@ -475,8 +503,18 @@ tr:hover {
 .grading-row span,
 .recommendation p,
 .health-item span,
+.live-health span,
 .coverage-row span {
   font-size: 12px;
+}
+
+.live-health {
+  margin-top: 14px;
+}
+
+.live-health strong,
+.live-health span {
+  display: block;
 }
 
 .coverage-row {

@@ -102,4 +102,34 @@ describe("historical replay assembly", () => {
     expect(replay.slates).toHaveLength(1);
     expect(replay.slates[0]!.date).toBe("2025-07-01");
   });
+
+  it("requires complete model inputs before replaying a historical feature snapshot", () => {
+    const snapshot = features({ homeWrcPlus: undefined });
+    const replay = buildHistoricalSeasonReplay({
+      season: 2025,
+      games: [
+        {
+          date: snapshot.date,
+          gameId: snapshot.gameId,
+          featureSnapshot: snapshot,
+          finalResult: {
+            gameId: snapshot.gameId,
+            status: "final",
+            homeTeam: snapshot.homeTeam,
+            awayTeam: snapshot.awayTeam,
+            homeScore: 7,
+            awayScore: 2,
+          },
+          oddsSnapshotAvailable: true,
+          weatherSnapshotAvailable: true,
+          parkFactorAvailable: true,
+        },
+      ],
+    });
+
+    expect(replay.coverage.featureSnapshots).toBe(0);
+    expect(replay.coverage.missingSignals).toContain("feature snapshots");
+    expect(replay.coverage.blockers).toContain("1 game is missing imported feature snapshots.");
+    expect(replay.slates).toHaveLength(0);
+  });
 });

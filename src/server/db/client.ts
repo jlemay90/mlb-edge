@@ -1,7 +1,8 @@
 import { createRequire } from "node:module";
 import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
 import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { SCHEMA_STATEMENTS } from "./schema";
 
 const require = createRequire(import.meta.url);
@@ -9,7 +10,11 @@ const { DatabaseSync } = require("node:sqlite") as { DatabaseSync: typeof Databa
 
 export type Db = DatabaseSyncType;
 
-export function createDatabase(filename = "data/mlb-edge-lab.sqlite"): Db {
+export function defaultDatabaseFilename(): string {
+  return process.env.MLB_EDGE_DB_PATH ?? (process.env.VERCEL ? join(tmpdir(), "mlb-edge-lab.sqlite") : "data/mlb-edge-lab.sqlite");
+}
+
+export function createDatabase(filename = defaultDatabaseFilename()): Db {
   if (filename !== ":memory:") {
     mkdirSync(dirname(filename), { recursive: true });
   }
