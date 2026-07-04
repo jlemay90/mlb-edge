@@ -63,6 +63,24 @@ describe("historical replay report", () => {
     expect(game?.featureSnapshot?.homeRunLineOdds).toBeUndefined();
   });
 
+  it("uses scheduled first-pitch date for replay slate grouping when official date is later", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mlb-edge-replay-"));
+    const csvPath = join(dir, "called-games.csv");
+    writeFileSync(
+      csvPath,
+      [
+        "season,gameId,officialDate,gameDate,awayTeam,homeTeam,awayScore,homeScore,homeMoneyline,awayMoneyline,total,overOdds,underOdds,runLine,homeRunLineOdds,awayRunLineOdds,homeWrcPlus,awayWrcPlus,homeStarterFip,awayStarterFip,homeBullpenRest,awayBullpenRest,parkRunFactor,weatherRunImpact,homeRecentForm,awayRecentForm,missingSignals",
+        "2023,game-1,2023-09-01,2023-04-05T16:35:00Z,Away Club,Home Club,2,7,-105,-105,8,-110,-110,-1.5,155,-180,132,84,3.05,5.25,82,42,106,0.4,1.4,-0.8,confirmed lineups",
+      ].join("\n"),
+      "utf8"
+    );
+
+    const game = loadCalledGamesCsv(csvPath).get(2023)?.[0];
+
+    expect(game?.date).toBe("2023-04-05");
+    expect(game?.featureSnapshot?.date).toBe("2023-04-05");
+  });
+
   it("builds an actual replay report from called-games CSV rows", async () => {
     const dir = mkdtempSync(join(tmpdir(), "mlb-edge-replay-"));
     const csvPath = join(dir, "called-games.csv");

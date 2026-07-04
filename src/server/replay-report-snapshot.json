@@ -11,27 +11,27 @@
   "completedSeasonCount": 0,
   "status": "blocked",
   "summary": {
-    "totalPicks": 7589,
+    "totalPicks": 15221,
     "record": {
-      "wins": 3481,
-      "losses": 3631,
-      "pushes": 377,
-      "voids": 100
+      "wins": 6921,
+      "losses": 7326,
+      "pushes": 697,
+      "voids": 277
     },
-    "winRate": 0.4895,
-    "unitsStaked": 7489,
-    "profitUnits": -195.9422,
-    "roi": -0.0262,
-    "averageOdds": -29.0584,
-    "averageEdge": 0.1346,
-    "maxDrawdownUnits": 234.7977,
+    "winRate": 0.4858,
+    "unitsStaked": 14944,
+    "profitUnits": -528.5394,
+    "roi": -0.0354,
+    "averageOdds": -30.0367,
+    "averageEdge": 0.1385,
+    "maxDrawdownUnits": 562.1311,
     "clv": {
       "count": 0,
       "missing": true
     },
     "dateRange": {
-      "start": "2020-09-01",
-      "end": "2023-05-10"
+      "start": "2020-07-23",
+      "end": "2023-05-11"
     }
   },
   "coverage": [

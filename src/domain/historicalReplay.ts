@@ -37,7 +37,7 @@ function buildBacktestPicksForGame(
   game: HistoricalGameReplayInput,
   modelConfig: ModelConfig
 ): BacktestPick[] {
-  if (!hasCompleteFeatureSnapshot(game.featureSnapshot) || !game.finalResult) {
+  if (!game.featureSnapshot || !game.finalResult || !hasOddsInSnapshot(game.featureSnapshot)) {
     return [];
   }
 

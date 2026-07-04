@@ -76,7 +76,7 @@ function rowToReplayInput(row: CalledGameCsvRow): HistoricalGameReplayInput {
 function rowToFeatureSnapshot(row: CalledGameCsvRow): GameFeatures {
   return {
     gameId: textValue(row.gameId),
-    date: textValue(row.officialDate) || textValue(row.gameDate).slice(0, 10),
+    date: textValue(row.gameDate).slice(0, 10) || textValue(row.officialDate),
     homeTeam: textValue(row.homeTeam),
     awayTeam: textValue(row.awayTeam),
     venueName: optionalText(row.venue),

@@ -103,7 +103,7 @@ describe("historical replay assembly", () => {
     expect(replay.slates[0]!.date).toBe("2025-07-01");
   });
 
-  it("requires complete model inputs before replaying a historical feature snapshot", () => {
+  it("replays priced partial feature snapshots while keeping coverage incomplete", () => {
     const snapshot = features({ homeWrcPlus: undefined });
     const replay = buildHistoricalSeasonReplay({
       season: 2025,
@@ -130,7 +130,8 @@ describe("historical replay assembly", () => {
     expect(replay.coverage.featureSnapshots).toBe(0);
     expect(replay.coverage.missingSignals).toContain("feature snapshots");
     expect(replay.coverage.blockers).toContain("1 game is missing imported feature snapshots.");
-    expect(replay.slates).toHaveLength(0);
+    expect(replay.slates).toHaveLength(1);
+    expect(replay.slates[0]!.picks.length).toBeGreaterThan(0);
   });
 
   it("marks a requested season with no cached replay rows as missing imported data", () => {
