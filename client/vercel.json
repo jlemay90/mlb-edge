@@ -1,0 +1,20 @@
+{
+  "framework": "vite",
+  "buildCommand": "cd .. && cd client && pnpm build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/mlb", "destination": "/index.html" },
+    { "source": "/mlb/:path*", "destination": "/index.html" },
+    { "source": "/api/(.*)", "destination": "/api/$1" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ]
+}

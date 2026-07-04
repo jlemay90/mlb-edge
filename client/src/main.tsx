@@ -13,7 +13,7 @@ export const trpc = createTRPCReact<AppRouter>();
 
 function TrpcProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { staleTime: 5 * 60 * 1000, refetchOnWindowFocus: false } } }));
-  const [trpcClient] = useState(() => trpc.createClient({ links: [httpBatchLink({ url: "/api/trpc" })] }));
+  const [trpcClient] = useState(() => trpc.createClient({ links: [httpBatchLink({ url: import.meta.env.VITE_API_URL || "/api/trpc" })] }));
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
