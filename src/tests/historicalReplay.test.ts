@@ -132,4 +132,18 @@ describe("historical replay assembly", () => {
     expect(replay.coverage.blockers).toContain("1 game is missing imported feature snapshots.");
     expect(replay.slates).toHaveLength(0);
   });
+
+  it("marks a requested season with no cached replay rows as missing imported data", () => {
+    const replay = buildHistoricalSeasonReplay({
+      season: 2025,
+      games: [],
+    });
+
+    expect(replay.coverage.scheduledGames).toBe(0);
+    expect(replay.coverage.missingSignals).toEqual(
+      expect.arrayContaining(["historical odds", "final results", "weather", "park factors", "feature snapshots"])
+    );
+    expect(replay.coverage.blockers).toContain("No cached replay rows found for this season.");
+    expect(replay.slates).toHaveLength(0);
+  });
 });

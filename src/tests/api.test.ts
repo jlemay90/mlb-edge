@@ -278,6 +278,8 @@ describe("persistence and API", () => {
   it("exposes historical backtest readiness without claiming unverified success", async () => {
     const db = migratedDb();
     dbs.push(db);
+    const tempDir = mkdtempSync(join(tmpdir(), "mlb-edge-no-replay-"));
+    tempDirs.push(tempDir);
     const app = createApp({
       db,
       config: {
@@ -285,6 +287,8 @@ describe("persistence and API", () => {
         openAiApiKey: "openai-secret-value",
         nwsUserAgent: "mlb-edge-lab/test",
       },
+      historicalReplayReportPath: join(tempDir, "missing-replay-report.json"),
+      historicalReplayReportFallbackPath: join(tempDir, "missing-replay-snapshot.json"),
     });
 
     const historical = (await request(app, "/api/backtest/historical?asOf=2026-07-01")) as {
@@ -305,14 +309,121 @@ describe("persistence and API", () => {
     expect(responseText).not.toContain("openai-secret-value");
   });
 
+  it("serves a cached historical replay report when one is available", async () => {
+    const db = migratedDb();
+    dbs.push(db);
+    const tempDir = mkdtempSync(join(tmpdir(), "mlb-edge-replay-report-"));
+    tempDirs.push(tempDir);
+    const replayReportPath = join(tempDir, "replay-report.json");
+    writeFileSync(
+      replayReportPath,
+      JSON.stringify({
+        seasons: [2021, 2022, 2023, 2024, 2025],
+        requiredSeasonCount: 5,
+        completedSeasonCount: 4,
+        status: "partial",
+        summary: {
+          totalPicks: 42,
+          record: { wins: 23, losses: 17, pushes: 2, voids: 0 },
+          winRate: 0.575,
+          unitsStaked: 42,
+          profitUnits: 3.12,
+          roi: 0.0743,
+          averageOdds: -106,
+          averageEdge: 0.061,
+          maxDrawdownUnits: 2.4,
+          clv: { count: 0, missing: true },
+        },
+        coverage: [],
+        blockers: ["2021: 2 games are missing imported feature snapshots."],
+        canClaimHighSuccessRate: false,
+      })
+    );
+    const app = createApp({
+      db,
+      historicalReplayReportPath: replayReportPath,
+    } as Parameters<typeof createApp>[0] & { historicalReplayReportPath: string });
+
+    const historical = (await request(app, "/api/backtest/historical?asOf=2026-07-01")) as {
+      status: string;
+      summary: { totalPicks: number; roi: number };
+      blockers: string[];
+    };
+
+    expect(historical.status).toBe("partial");
+    expect(historical.summary.totalPicks).toBe(42);
+    expect(historical.summary.roi).toBe(0.0743);
+    expect(historical.blockers.join(" ")).not.toContain("ODDS_API_KEY is missing");
+  });
+
+  it("uses cached historical replay coverage for historical odds health instead of calling the paid API", async () => {
+    const db = migratedDb();
+    dbs.push(db);
+    const tempDir = mkdtempSync(join(tmpdir(), "mlb-edge-replay-report-"));
+    tempDirs.push(tempDir);
+    const replayReportPath = join(tempDir, "replay-report.json");
+    writeFileSync(
+      replayReportPath,
+      JSON.stringify({
+        seasons: [2024, 2025],
+        requiredSeasonCount: 2,
+        completedSeasonCount: 2,
+        status: "verified",
+        summary: {
+          totalPicks: 9,
+          record: { wins: 5, losses: 4, pushes: 0, voids: 0 },
+          winRate: 0.5556,
+          unitsStaked: 9,
+          profitUnits: 0.73,
+          roi: 0.0811,
+          averageOdds: -108,
+          averageEdge: 0.052,
+          maxDrawdownUnits: 1,
+          clv: { count: 0, missing: true },
+        },
+        coverage: [
+          { season: 2024, oddsSnapshots: 123, complete: true },
+          { season: 2025, oddsSnapshots: 456, complete: true },
+        ],
+        blockers: [],
+        canClaimHighSuccessRate: true,
+      })
+    );
+    const app = createApp({
+      db,
+      historicalReplayReportPath: replayReportPath,
+      historicalOddsHealthCheck: async () => {
+        throw new Error("paid historical endpoint should not be called");
+      },
+    } as Parameters<typeof createApp>[0] & { historicalReplayReportPath: string });
+
+    const health = (await request(app, "/api/odds/historical-check")) as {
+      ok: boolean;
+      eventCount: number;
+      snapshotDate: string;
+      source: string;
+    };
+
+    expect(health).toMatchObject({
+      ok: true,
+      eventCount: 579,
+      snapshotDate: "cached replay",
+      source: "cached-replay-report",
+    });
+  });
+
   it("checks historical odds access without returning the API key", async () => {
     const db = migratedDb();
     dbs.push(db);
+    const tempDir = mkdtempSync(join(tmpdir(), "mlb-edge-no-replay-"));
+    tempDirs.push(tempDir);
     const app = createApp({
       db,
       config: {
         oddsApiKey: "odds-secret-value",
       },
+      historicalReplayReportPath: join(tempDir, "missing-replay-report.json"),
+      historicalReplayReportFallbackPath: join(tempDir, "missing-replay-snapshot.json"),
       historicalOddsHealthCheck: async (_apiKey, snapshotDate) => ({
         configured: true,
         ok: true,

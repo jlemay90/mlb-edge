@@ -1,0 +1,195 @@
+{
+  "seasons": [
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "requiredSeasonCount": 5,
+  "completedSeasonCount": 0,
+  "status": "blocked",
+  "summary": {
+    "totalPicks": 7589,
+    "record": {
+      "wins": 3481,
+      "losses": 3631,
+      "pushes": 377,
+      "voids": 100
+    },
+    "winRate": 0.4895,
+    "unitsStaked": 7489,
+    "profitUnits": -195.9422,
+    "roi": -0.0262,
+    "averageOdds": -29.0584,
+    "averageEdge": 0.1346,
+    "maxDrawdownUnits": 234.7977,
+    "clv": {
+      "count": 0,
+      "missing": true
+    },
+    "dateRange": {
+      "start": "2020-09-01",
+      "end": "2023-05-10"
+    }
+  },
+  "coverage": [
+    {
+      "season": 2020,
+      "scheduledGames": 896,
+      "finalResults": 896,
+      "oddsSnapshots": 896,
+      "weatherSnapshots": 896,
+      "parkFactors": 293,
+      "featureSnapshots": 194,
+      "missingSignals": [
+        "park factors",
+        "feature snapshots"
+      ],
+      "blockers": [
+        "603 games are missing park factors.",
+        "702 games are missing imported feature snapshots."
+      ],
+      "complete": false
+    },
+    {
+      "season": 2021,
+      "scheduledGames": 2481,
+      "finalResults": 2481,
+      "oddsSnapshots": 2371,
+      "weatherSnapshots": 2481,
+      "parkFactors": 1816,
+      "featureSnapshots": 1399,
+      "missingSignals": [
+        "historical odds",
+        "park factors",
+        "feature snapshots"
+      ],
+      "blockers": [
+        "110 games are missing historical odds snapshots.",
+        "665 games are missing park factors.",
+        "1082 games are missing imported feature snapshots."
+      ],
+      "complete": false
+    },
+    {
+      "season": 2022,
+      "scheduledGames": 2460,
+      "finalResults": 2460,
+      "oddsSnapshots": 2459,
+      "weatherSnapshots": 2460,
+      "parkFactors": 1845,
+      "featureSnapshots": 1456,
+      "missingSignals": [
+        "historical odds",
+        "park factors",
+        "feature snapshots"
+      ],
+      "blockers": [
+        "1 game is missing historical odds snapshots.",
+        "615 games are missing park factors.",
+        "1004 games are missing imported feature snapshots."
+      ],
+      "complete": false
+    },
+    {
+      "season": 2023,
+      "scheduledGames": 571,
+      "finalResults": 571,
+      "oddsSnapshots": 571,
+      "weatherSnapshots": 569,
+      "parkFactors": 12,
+      "featureSnapshots": 7,
+      "missingSignals": [
+        "weather",
+        "park factors",
+        "feature snapshots"
+      ],
+      "blockers": [
+        "2 games are missing weather snapshots.",
+        "559 games are missing park factors.",
+        "564 games are missing imported feature snapshots."
+      ],
+      "complete": false
+    },
+    {
+      "season": 2024,
+      "scheduledGames": 0,
+      "finalResults": 0,
+      "oddsSnapshots": 0,
+      "weatherSnapshots": 0,
+      "parkFactors": 0,
+      "featureSnapshots": 0,
+      "missingSignals": [
+        "historical odds",
+        "final results",
+        "weather",
+        "park factors",
+        "feature snapshots"
+      ],
+      "blockers": [
+        "No cached replay rows found for this season."
+      ],
+      "complete": false
+    },
+    {
+      "season": 2025,
+      "scheduledGames": 0,
+      "finalResults": 0,
+      "oddsSnapshots": 0,
+      "weatherSnapshots": 0,
+      "parkFactors": 0,
+      "featureSnapshots": 0,
+      "missingSignals": [
+        "historical odds",
+        "final results",
+        "weather",
+        "park factors",
+        "feature snapshots"
+      ],
+      "blockers": [
+        "No cached replay rows found for this season."
+      ],
+      "complete": false
+    }
+  ],
+  "blockers": [
+    "2020: 603 games are missing park factors.",
+    "2020: 702 games are missing imported feature snapshots.",
+    "2021: 110 games are missing historical odds snapshots.",
+    "2021: 665 games are missing park factors.",
+    "2021: 1082 games are missing imported feature snapshots.",
+    "2022: 1 game is missing historical odds snapshots.",
+    "2022: 615 games are missing park factors.",
+    "2022: 1004 games are missing imported feature snapshots.",
+    "2023: 2 games are missing weather snapshots.",
+    "2023: 559 games are missing park factors.",
+    "2023: 564 games are missing imported feature snapshots.",
+    "2024: No cached replay rows found for this season.",
+    "2025: No cached replay rows found for this season.",
+    "2020: missing park factors",
+    "2020: missing feature snapshots",
+    "2021: missing historical odds",
+    "2021: missing park factors",
+    "2021: missing feature snapshots",
+    "2022: missing historical odds",
+    "2022: missing park factors",
+    "2022: missing feature snapshots",
+    "2023: missing weather",
+    "2023: missing park factors",
+    "2023: missing feature snapshots",
+    "2024: missing historical odds",
+    "2024: missing final results",
+    "2024: missing weather",
+    "2024: missing park factors",
+    "2024: missing feature snapshots",
+    "2025: missing historical odds",
+    "2025: missing final results",
+    "2025: missing weather",
+    "2025: missing park factors",
+    "2025: missing feature snapshots",
+    "Need 5 completed seasons with odds, results, weather, park factors, and feature snapshots; currently have 0."
+  ],
+  "canClaimHighSuccessRate": false
+}

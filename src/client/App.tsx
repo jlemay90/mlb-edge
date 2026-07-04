@@ -47,6 +47,8 @@ type HistoricalOddsHealth = {
   checkedAt: string;
   snapshotDate: string;
   eventCount: number;
+  source?: string;
+  seasons?: number[];
   status?: number;
   requestUsage?: {
     requestsRemaining?: string;
@@ -116,6 +118,50 @@ type HistoricalImportReport = {
     blockers: string[];
   }>;
   blockers: string[];
+};
+type HistoricalReplayReport = {
+  seasons: number[];
+  requiredSeasonCount: number;
+  completedSeasonCount: number;
+  status: string;
+  summary: {
+    dateRange?: {
+      start: string;
+      end: string;
+    };
+    totalPicks: number;
+    record: {
+      wins: number;
+      losses: number;
+      pushes: number;
+      voids: number;
+    };
+    winRate: number;
+    unitsStaked: number;
+    profitUnits: number;
+    roi: number;
+    averageOdds: number;
+    averageEdge: number;
+    maxDrawdownUnits: number;
+    clv: {
+      count: number;
+      averageProbabilityDelta?: number;
+      missing: boolean;
+    };
+  };
+  coverage: Array<{
+    season: number;
+    complete: boolean;
+    scheduledGames: number;
+    finalResults: number;
+    oddsSnapshots: number;
+    weatherSnapshots: number;
+    parkFactors: number;
+    featureSnapshots: number;
+    blockers: string[];
+  }>;
+  blockers: string[];
+  canClaimHighSuccessRate: boolean;
 };
 
 const navItems: Array<{ label: View; icon: typeof Table2 }> = [
@@ -475,6 +521,8 @@ function BacktestView() {
   const historical = sampleModelPreview.historicalBacktest;
   const [importReport, setImportReport] = useState<HistoricalImportReport | null>(null);
   const [importError, setImportError] = useState("");
+  const [replayReport, setReplayReport] = useState<HistoricalReplayReport | null>(null);
+  const [replayError, setReplayError] = useState("");
   const missingFeatureSignals = importReport
     ? topMissingFeatureSignals(importReport.totals.featureDraftMissingSignals ?? {})
     : [];
@@ -497,6 +545,24 @@ function BacktestView() {
       .catch((error: unknown) => {
         if (isMounted) {
           setImportError(error instanceof Error ? error.message : "Import report unavailable.");
+        }
+      });
+
+    fetch(`/api/backtest/historical?asOf=${localTodayIsoDate()}`)
+      .then(async (response) => {
+        const body = await response.json();
+        if (isMounted) {
+          if (response.ok) {
+            setReplayReport(body as HistoricalReplayReport);
+            setReplayError("");
+          } else {
+            setReplayError((body as { error?: string }).error ?? `HTTP ${response.status}`);
+          }
+        }
+      })
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setReplayError(error instanceof Error ? error.message : "Replay report unavailable.");
         }
       });
 
@@ -536,13 +602,25 @@ function BacktestView() {
       <section className="panel">
         <PanelTitle
           icon={LineChart}
-          title={importReport ? "Replay Status" : "Equity Shape"}
-          detail={importReport ? "waiting on odds and features" : "demo drawdown and CLV checks"}
+          title={replayReport ? "Replay Results" : importReport ? "Replay Status" : "Equity Shape"}
+          detail={replayReport ? "cache-only scored picks" : importReport ? "cached import coverage" : "demo drawdown and CLV checks"}
         />
-        {importReport ? (
+        {replayReport ? (
+          <div className="metrics-grid">
+            <Metric label="Status" value={replayReport.status} tone={replayReport.status === "verified" ? "gold" : undefined} />
+            <Metric label="Picks" value={String(replayReport.summary.totalPicks)} />
+            <Metric label="Record" value={`${replayReport.summary.record.wins}-${replayReport.summary.record.losses}-${replayReport.summary.record.pushes}`} />
+            <Metric label="Win rate" value={formatPct(replayReport.summary.winRate)} />
+            <Metric label="ROI" value={formatPct(replayReport.summary.roi)} tone={replayReport.summary.roi > 0 ? "gold" : undefined} />
+            <Metric label="Profit" value={formatUnits(replayReport.summary.profitUnits)} tone={replayReport.summary.profitUnits > 0 ? "gold" : undefined} />
+            <Metric label="Drawdown" value={formatUnits(replayReport.summary.maxDrawdownUnits)} />
+            <Metric label="Avg edge" value={formatPct(replayReport.summary.averageEdge)} />
+            <Metric label="CLV rows" value={String(replayReport.summary.clv.count)} />
+          </div>
+        ) : importReport ? (
           <>
             <p className="muted-copy">
-              Equity, ROI, CLV, and win rate stay locked until historical odds and frozen pregame feature snapshots are imported.
+              Cached odds and feature drafts are available. Run the replay command after import changes to refresh ROI, win rate, and drawdown.
             </p>
             <div className="signal-list">
               {missingFeatureSignals.length > 0 ? (
@@ -570,10 +648,35 @@ function BacktestView() {
       <section className="panel wide-panel">
         <PanelTitle
           icon={ShieldCheck}
-          title={importReport ? "Historical Import Coverage" : "Historical 5-Season Status"}
-          detail={importReport ? importReport.seasons.join(", ") : `${historical.seasons[0]}-${historical.seasons[historical.seasons.length - 1]}`}
+          title={replayReport ? "Historical Replay Coverage" : importReport ? "Historical Import Coverage" : "Historical 5-Season Status"}
+          detail={replayReport ? replayReport.seasons.join(", ") : importReport ? importReport.seasons.join(", ") : `${historical.seasons[0]}-${historical.seasons[historical.seasons.length - 1]}`}
         />
-        {importReport ? (
+        {replayReport ? (
+          <>
+            {replayError && <div className="warning-list"><span>{replayError}</span></div>}
+            <div className="metric-row compact">
+              <Metric label="Complete" value={`${replayReport.completedSeasonCount}/${replayReport.requiredSeasonCount}`} />
+              <Metric label="Date range" value={replayReport.summary.dateRange ? `${replayReport.summary.dateRange.start} to ${replayReport.summary.dateRange.end}` : "not scored"} />
+              <Metric label="Can claim high success" value={replayReport.canClaimHighSuccessRate ? "yes" : "no"} tone={replayReport.canClaimHighSuccessRate ? "gold" : undefined} />
+            </div>
+            <div className="coverage-grid">
+              {replayReport.coverage.map((season) => (
+                <div className="coverage-row" key={season.season}>
+                  <strong>{season.season}</strong>
+                  <span>{season.complete ? "complete" : "partial"}</span>
+                  <span>{season.oddsSnapshots} odds</span>
+                  <span>{season.finalResults} finals</span>
+                  <span>{season.featureSnapshots} features</span>
+                </div>
+              ))}
+            </div>
+            <div className="warning-list">
+              {replayReport.blockers.slice(0, 6).map((blocker) => (
+                <span key={blocker}>{blocker}</span>
+              ))}
+            </div>
+          </>
+        ) : importReport ? (
           <>
             <div className="metric-row compact">
               <Metric label="Games" value={String(importReport.totals.games)} />
@@ -857,6 +960,10 @@ function formatPct(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+function formatUnits(value: number): string {
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)}u`;
+}
+
 function formatOdds(odds: number): string {
   return `${odds > 0 ? "+" : ""}${odds}`;
 }
@@ -899,6 +1006,7 @@ function pitcherLine(game: TodayGame): string {
 function oddsHealthStatus(health: LiveOddsHealth | HistoricalOddsHealth | null, error: string): string {
   if (error && !health) return "error";
   if (!health) return "checking";
+  if (health.ok && "source" in health && health.source === "cached-replay-report") return "cached";
   if (health.ok) return "connected";
   if (!health.configured) return "missing key";
   return "blocked";
@@ -915,7 +1023,8 @@ function isSourceAvailable(status: string): boolean {
 
 function sourceDetail(source: ApiHealthSource): string {
   if (source.name === "MLB Stats API") return "Schedules, venues, and final scores.";
-  if (source.name === "The Odds API") return "Current odds and paid historical lines.";
+  if (source.name === "The Odds API") return "Current odds for live picks.";
+  if (source.name === "Historical Odds Cache") return "Backtesting reads stored called-games and odds snapshots.";
   if (source.name === "National Weather Service") return "U.S. stadium hourly weather.";
   if (source.name === "Open-Meteo") return "Weather fallback when NWS is unavailable.";
   if (source.name === "OpenAI") return "Optional narrative explanations.";
@@ -945,7 +1054,12 @@ function historicalOddsDetail(health: HistoricalOddsHealth | null, error: string
   }
 
   if (!health) {
-    return "Checking the paid historical endpoint through the local API.";
+    return "Reading cached historical odds coverage from the replay report.";
+  }
+
+  if (health.source === "cached-replay-report") {
+    const seasons = health.seasons?.join(", ");
+    return `${health.eventCount} cached historical odds snapshots${seasons ? ` across ${seasons}` : ""}.`;
   }
 
   if (health.ok) {

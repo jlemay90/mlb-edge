@@ -80,14 +80,14 @@ function rowToFeatureSnapshot(row: CalledGameCsvRow): GameFeatures {
     homeTeam: textValue(row.homeTeam),
     awayTeam: textValue(row.awayTeam),
     venueName: optionalText(row.venue),
-    homeMoneyline: numberValue(row.homeMoneyline),
-    awayMoneyline: numberValue(row.awayMoneyline),
+    homeMoneyline: americanOddsValue(row.homeMoneyline),
+    awayMoneyline: americanOddsValue(row.awayMoneyline),
     total: numberValue(row.total),
-    overOdds: numberValue(row.overOdds),
-    underOdds: numberValue(row.underOdds),
+    overOdds: americanOddsValue(row.overOdds),
+    underOdds: americanOddsValue(row.underOdds),
     runLine: numberValue(row.runLine),
-    homeRunLineOdds: numberValue(row.homeRunLineOdds),
-    awayRunLineOdds: numberValue(row.awayRunLineOdds),
+    homeRunLineOdds: americanOddsValue(row.homeRunLineOdds),
+    awayRunLineOdds: americanOddsValue(row.awayRunLineOdds),
     homeWrcPlus: numberValue(row.homeWrcPlus),
     awayWrcPlus: numberValue(row.awayWrcPlus),
     homeStarterFip: numberValue(row.homeStarterFip),
@@ -220,6 +220,15 @@ function numberValue(value: string | undefined): number | undefined {
 
   const parsed = Number(text);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function americanOddsValue(value: string | undefined): number | undefined {
+  const parsed = numberValue(value);
+  if (parsed === undefined || Math.abs(parsed) < 100 || Math.abs(parsed) > 1000) {
+    return undefined;
+  }
+
+  return parsed;
 }
 
 function booleanValue(value: string | undefined): boolean | undefined {

@@ -3,7 +3,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { summarizeBacktest, type BacktestPick } from "../domain/backtest.js";
-import { buildHistoricalBacktestReadiness } from "../domain/historicalBacktest.js";
+import {
+  buildHistoricalBacktestReadiness,
+  type HistoricalBacktestReport,
+} from "../domain/historicalBacktest.js";
 import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "../domain/modelConfig.js";
 import { createDatabase, runMigrations, type Db } from "./db/client.js";
 import { loadLocalEnv } from "./env.js";
@@ -34,6 +37,8 @@ export type AppDependencies = {
   staticDir?: string;
   importReportPath?: string;
   importReportFallbackPath?: string;
+  historicalReplayReportPath?: string;
+  historicalReplayReportFallbackPath?: string;
 };
 
 export function createApp(dependencies: AppDependencies = {}): Express {
@@ -49,6 +54,10 @@ export function createApp(dependencies: AppDependencies = {}): Express {
     dependencies.importReportPath ?? resolve(process.cwd(), "data/historical/import-report.json");
   const importReportFallbackPath =
     dependencies.importReportFallbackPath ?? resolve(process.cwd(), "src/server/import-report-snapshot.json");
+  const historicalReplayReportPath =
+    dependencies.historicalReplayReportPath ?? resolve(process.cwd(), "data/historical/replay-report.json");
+  const historicalReplayReportFallbackPath =
+    dependencies.historicalReplayReportFallbackPath ?? resolve(process.cwd(), "src/server/replay-report-snapshot.json");
 
   saveModelVersion(db, modelConfig);
 
@@ -104,6 +113,15 @@ export function createApp(dependencies: AppDependencies = {}): Express {
 
   app.get("/api/backtest/historical", (req, res) => {
     const asOfDateIso = typeof req.query.asOf === "string" ? req.query.asOf : todayIsoDate();
+    const cachedReplayReport = readHistoricalReplayReport(
+      historicalReplayReportPath,
+      historicalReplayReportFallbackPath
+    );
+
+    if (cachedReplayReport) {
+      res.json(cachedReplayReport);
+      return;
+    }
 
     try {
       res.json(
@@ -130,6 +148,15 @@ export function createApp(dependencies: AppDependencies = {}): Express {
   });
 
   app.get("/api/odds/historical-check", async (req, res) => {
+    const cachedReplayReport = readHistoricalReplayReport(
+      historicalReplayReportPath,
+      historicalReplayReportFallbackPath
+    );
+    if (cachedReplayReport) {
+      res.json(buildCachedHistoricalOddsHealth(cachedReplayReport, Boolean(config.oddsApiKey?.trim())));
+      return;
+    }
+
     const snapshotDate =
       typeof req.query.date === "string" ? req.query.date : "2025-07-01T16:00:00Z";
     const apiKey = config.oddsApiKey ?? "";
@@ -178,6 +205,11 @@ export function createApp(dependencies: AppDependencies = {}): Express {
   });
 
   app.get("/api/data-health", (_req, res) => {
+    const cachedReplayReport = readHistoricalReplayReport(
+      historicalReplayReportPath,
+      historicalReplayReportFallbackPath
+    );
+
     res.json({
       sources: [
         {
@@ -189,6 +221,11 @@ export function createApp(dependencies: AppDependencies = {}): Express {
           name: "The Odds API",
           status: config.oddsApiKey?.trim() ? "configured" : "missing",
           requiresKey: true,
+        },
+        {
+          name: "Historical Odds Cache",
+          status: cachedReplayReport ? "cached" : "missing-cache",
+          requiresKey: false,
         },
         {
           name: "National Weather Service",
@@ -232,6 +269,46 @@ function configFromEnv(): ApiRuntimeConfig {
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function readHistoricalReplayReport(
+  primaryPath: string,
+  fallbackPath: string
+): HistoricalBacktestReport | undefined {
+  const reportPath = existsSync(primaryPath) ? primaryPath : fallbackPath;
+  if (!existsSync(reportPath)) {
+    return undefined;
+  }
+
+  return JSON.parse(readFileSync(reportPath, "utf8")) as HistoricalBacktestReport;
+}
+
+function buildCachedHistoricalOddsHealth(
+  report: HistoricalBacktestReport,
+  oddsApiConfigured: boolean
+): {
+  configured: boolean;
+  ok: boolean;
+  checkedAt: string;
+  snapshotDate: string;
+  eventCount: number;
+  source: "cached-replay-report";
+  seasons: number[];
+} {
+  const eventCount = report.coverage.reduce(
+    (sum, season) => sum + (Number.isFinite(season.oddsSnapshots) ? season.oddsSnapshots : 0),
+    0
+  );
+
+  return {
+    configured: oddsApiConfigured,
+    ok: eventCount > 0,
+    checkedAt: new Date().toISOString(),
+    snapshotDate: "cached replay",
+    eventCount,
+    source: "cached-replay-report",
+    seasons: report.seasons,
+  };
 }
 
 function installStaticFrontend(app: Express, staticDir: string): void {

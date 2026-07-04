@@ -43,6 +43,26 @@ describe("historical replay report", () => {
     expect(game?.featureSnapshot?.homeLineupConfirmed).toBe(false);
   });
 
+  it("treats invalid American odds as missing so cached replay math stays finite", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mlb-edge-replay-"));
+    const csvPath = join(dir, "called-games.csv");
+    writeFileSync(
+      csvPath,
+      [
+        "season,gameId,officialDate,awayTeam,homeTeam,awayScore,homeScore,homeMoneyline,awayMoneyline,total,overOdds,underOdds,runLine,homeRunLineOdds,awayRunLineOdds,homeWrcPlus,awayWrcPlus,homeStarterFip,awayStarterFip,homeBullpenRest,awayBullpenRest,parkRunFactor,weatherRunImpact,homeRecentForm,awayRecentForm,missingSignals",
+        "2025,game-1,2025-07-01,Away Club,Home Club,2,7,-1,1200,8,-110,0,-1.5,99,-180,132,84,3.05,5.25,82,42,106,0.4,1.4,-0.8,invalid odds",
+      ].join("\n"),
+      "utf8"
+    );
+
+    const game = loadCalledGamesCsv(csvPath).get(2025)?.[0];
+
+    expect(game?.featureSnapshot?.homeMoneyline).toBeUndefined();
+    expect(game?.featureSnapshot?.awayMoneyline).toBeUndefined();
+    expect(game?.featureSnapshot?.underOdds).toBeUndefined();
+    expect(game?.featureSnapshot?.homeRunLineOdds).toBeUndefined();
+  });
+
   it("builds an actual replay report from called-games CSV rows", async () => {
     const dir = mkdtempSync(join(tmpdir(), "mlb-edge-replay-"));
     const csvPath = join(dir, "called-games.csv");

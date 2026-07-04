@@ -12,6 +12,7 @@
     "start": "tsx src/server/api.ts",
     "backtest:import": "tsx src/server/scripts/importHistoricalBacktest.ts",
     "backtest:export-called-games": "tsx src/server/scripts/exportHistoricalCalledGames.ts",
+    "backtest:replay": "tsx src/server/scripts/writeHistoricalReplayReport.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "tsc --noEmit",

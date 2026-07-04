@@ -116,6 +116,10 @@ function buildMissingSignals(counts: {
   parkFactors: number;
   featureSnapshots: number;
 }): RequiredHistoricalSignal[] {
+  if (counts.scheduledGames === 0) {
+    return ["historical odds", "final results", "weather", "park factors", "feature snapshots"];
+  }
+
   const signals: RequiredHistoricalSignal[] = [];
 
   if (counts.oddsSnapshots < counts.scheduledGames) signals.push("historical odds");
@@ -135,6 +139,10 @@ function buildBlockers(counts: {
   parkFactors: number;
   featureSnapshots: number;
 }): string[] {
+  if (counts.scheduledGames === 0) {
+    return ["No cached replay rows found for this season."];
+  }
+
   return [
     missingCountMessage(counts.scheduledGames - counts.oddsSnapshots, "historical odds snapshots"),
     missingCountMessage(counts.scheduledGames - counts.finalResults, "final results"),
