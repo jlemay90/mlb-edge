@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { type Express } from "express";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 async function request(app: Express, path: string): Promise<unknown> {
   const server = app.listen(0, "127.0.0.1");
@@ -18,6 +20,12 @@ async function request(app: Express, path: string): Promise<unknown> {
 }
 
 describe("Vercel API entrypoint", () => {
+  it("uses a Node ESM resolvable server import after Vercel transpiles TypeScript", () => {
+    const entrySource = readFileSync(resolve(process.cwd(), "api/[...path].ts"), "utf8");
+
+    expect(entrySource).toContain('../src/server/api.js');
+  });
+
   it("exports the Express API app for Vercel serverless routing", async () => {
     const module = await import("../../api/[...path]");
     const app = module.default as Express;
