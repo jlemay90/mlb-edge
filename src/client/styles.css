@@ -123,6 +123,26 @@ button {
   color: #ffffff;
 }
 
+.inline-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin-top: 14px;
+  border: 1px solid rgba(140, 205, 187, 0.32);
+  border-radius: 7px;
+  background: rgba(140, 205, 187, 0.1);
+  color: #e7fff7;
+  padding: 0 11px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.inline-action:hover {
+  background: rgba(140, 205, 187, 0.16);
+}
+
 .side-status {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);

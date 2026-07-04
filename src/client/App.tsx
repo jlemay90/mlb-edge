@@ -11,6 +11,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { readApiJson } from "./apiClient";
+import { replayStatusDetail, replayStatusLabel } from "./replaySummary";
 import { buildPickExplanation } from "../domain/explanations";
 import { sampleModelPreview } from "../domain/sampleData";
 import { type Pick } from "../domain/picks";
@@ -178,6 +180,8 @@ export function App() {
   const [todayData, setTodayData] = useState<TodayApiResponse | null>(null);
   const [todayError, setTodayError] = useState("");
   const [apiSources, setApiSources] = useState<ApiHealthSource[]>([]);
+  const [historicalReplay, setHistoricalReplay] = useState<HistoricalReplayReport | null>(null);
+  const [historicalReplayError, setHistoricalReplayError] = useState("");
   const [selectedPickId, setSelectedPickId] = useState("");
   const [requestDate, setRequestDate] = useState(initialSlateDate);
   const livePicks = todayData?.picks ?? [];
@@ -192,14 +196,29 @@ export function App() {
 
     fetch("/api/data-health")
       .then(async (response) => {
-        const body = (await response.json()) as DataHealthResponse;
-        if (isMounted && response.ok) {
+        const body = await readApiJson<DataHealthResponse>(response);
+        if (isMounted) {
           setApiSources(body.sources);
         }
       })
       .catch(() => {
         if (isMounted) {
           setApiSources([]);
+        }
+      });
+
+    fetch(`/api/backtest/historical?asOf=${localTodayIsoDate()}`)
+      .then(async (response) => {
+        const body = await readApiJson<HistoricalReplayReport>(response);
+        if (isMounted) {
+          setHistoricalReplay(body);
+          setHistoricalReplayError("");
+        }
+      })
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setHistoricalReplay(null);
+          setHistoricalReplayError(error instanceof Error ? error.message : "Historical replay unavailable.");
         }
       });
 
@@ -215,10 +234,10 @@ export function App() {
     setTodayError("");
     fetch(`/api/today?date=${requestDate}`)
       .then(async (response) => {
-        const body = (await response.json()) as TodayApiResponse;
+        const body = await readApiJson<TodayApiResponse>(response);
         if (isMounted) {
           setTodayData(body);
-          setTodayError(response.ok ? "" : body.scheduleError ?? `HTTP ${response.status}`);
+          setTodayError(body.scheduleError ?? "");
           setSelectedPickId(body.picks[0]?.id ?? "");
         }
       })
@@ -303,7 +322,10 @@ export function App() {
             picks={livePicks}
             scheduleError={todayData?.scheduleError ?? todayError}
             selectedPick={selectedPick}
+            historicalReplay={historicalReplay}
+            historicalReplayError={historicalReplayError}
             onSelectPick={setSelectedPickId}
+            onOpenBacktest={() => setView("Backtest")}
           />
         )}
         {view === "Parlays" && <ParlaysView />}
@@ -322,14 +344,20 @@ function TodayView({
   picks,
   scheduleError,
   selectedPick,
+  historicalReplay,
+  historicalReplayError,
   onSelectPick,
+  onOpenBacktest,
 }: {
   games: TodayGame[];
   loading: boolean;
   picks: Pick[];
   scheduleError?: string;
   selectedPick: Pick | undefined;
+  historicalReplay: HistoricalReplayReport | null;
+  historicalReplayError: string;
   onSelectPick: (id: string) => void;
+  onOpenBacktest: () => void;
 }) {
   if (picks.length === 0) {
     return (
@@ -362,7 +390,18 @@ function TodayView({
               </div>
               <span>{picks.length > 0 ? "ready" : "empty"}</span>
             </div>
+            <div className="health-item">
+              <div>
+                <strong>Historical Replay</strong>
+                <span>{historicalReplayError || replayStatusDetail(historicalReplay)}</span>
+              </div>
+              <span>{historicalReplayError ? "error" : replayStatusLabel(historicalReplay)}</span>
+            </div>
           </div>
+          <button type="button" className="inline-action" onClick={onOpenBacktest}>
+            <LineChart size={16} aria-hidden="true" />
+            <span>Open Backtest</span>
+          </button>
         </section>
       </div>
     );
@@ -440,7 +479,16 @@ function TodayView({
 
       <section className="panel">
         <PanelTitle icon={LineChart} title="Backtest Snapshot" detail="seeded replay" />
-        <BacktestMetrics compact />
+        {historicalReplay ? (
+          <div className="metrics-grid compact-grid">
+            <Metric label="Picks" value={String(historicalReplay.summary.totalPicks)} />
+            <Metric label="ROI" value={formatPct(historicalReplay.summary.roi)} tone={historicalReplay.summary.roi > 0 ? "gold" : undefined} />
+            <Metric label="Win rate" value={formatPct(historicalReplay.summary.winRate)} />
+            <Metric label="Status" value={historicalReplay.status} />
+          </div>
+        ) : (
+          <BacktestMetrics compact />
+        )}
       </section>
     </div>
   );
@@ -532,14 +580,10 @@ function BacktestView() {
 
     fetch("/api/backtest/import-report")
       .then(async (response) => {
-        const body = await response.json();
+        const body = await readApiJson<HistoricalImportReport>(response);
         if (isMounted) {
-          if (response.ok) {
-            setImportReport(body as HistoricalImportReport);
-            setImportError("");
-          } else {
-            setImportError((body as { error?: string }).error ?? `HTTP ${response.status}`);
-          }
+          setImportReport(body);
+          setImportError("");
         }
       })
       .catch((error: unknown) => {
@@ -550,14 +594,10 @@ function BacktestView() {
 
     fetch(`/api/backtest/historical?asOf=${localTodayIsoDate()}`)
       .then(async (response) => {
-        const body = await response.json();
+        const body = await readApiJson<HistoricalReplayReport>(response);
         if (isMounted) {
-          if (response.ok) {
-            setReplayReport(body as HistoricalReplayReport);
-            setReplayError("");
-          } else {
-            setReplayError((body as { error?: string }).error ?? `HTTP ${response.status}`);
-          }
+          setReplayReport(body);
+          setReplayError("");
         }
       })
       .catch((error: unknown) => {
@@ -789,10 +829,10 @@ function DataHealthView() {
 
     fetch("/api/data-health")
       .then(async (response) => {
-        const body = (await response.json()) as DataHealthResponse;
+        const body = await readApiJson<DataHealthResponse>(response);
         if (isMounted) {
-          setSources(response.ok ? body.sources : []);
-          setSourcesError(response.ok ? "" : `HTTP ${response.status}`);
+          setSources(body.sources);
+          setSourcesError("");
         }
       })
       .catch((error: unknown) => {
@@ -803,10 +843,10 @@ function DataHealthView() {
 
     fetch("/api/odds/live-check")
       .then(async (response) => {
-        const body = (await response.json()) as LiveOddsHealth;
+        const body = await readApiJson<LiveOddsHealth>(response);
         if (isMounted) {
           setLiveOdds(body);
-          setLiveOddsError(response.ok ? "" : body.error ?? `HTTP ${response.status}`);
+          setLiveOddsError("");
         }
       })
       .catch((error: unknown) => {
@@ -817,10 +857,10 @@ function DataHealthView() {
 
     fetch("/api/odds/historical-check")
       .then(async (response) => {
-        const body = (await response.json()) as HistoricalOddsHealth;
+        const body = await readApiJson<HistoricalOddsHealth>(response);
         if (isMounted) {
           setHistoricalOdds(body);
-          setHistoricalOddsError(response.ok ? "" : body.error ?? `HTTP ${response.status}`);
+          setHistoricalOddsError("");
         }
       })
       .catch((error: unknown) => {
