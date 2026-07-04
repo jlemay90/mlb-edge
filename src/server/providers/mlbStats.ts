@@ -1,4 +1,4 @@
-import { type FinalGameResult, type FinalGameStatus } from "../../domain/grading";
+import { type FinalGameResult, type FinalGameStatus } from "../../domain/grading.js";
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 

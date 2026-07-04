@@ -1,7 +1,7 @@
-import { type GradedPick, type PickGradeResult } from "../../domain/grading";
-import { type Pick } from "../../domain/picks";
-import { type GameFeatures, type GameProjection } from "../../domain/projection";
-import { type Db } from "../db/client";
+import { type GradedPick, type PickGradeResult } from "../../domain/grading.js";
+import { type Pick } from "../../domain/picks.js";
+import { type GameFeatures, type GameProjection } from "../../domain/projection.js";
+import { type Db } from "../db/client.js";
 import type { SQLInputValue } from "node:sqlite";
 
 export type PersistedPick = Pick & {

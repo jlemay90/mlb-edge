@@ -2,21 +2,21 @@ import express, { type Express } from "express";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { summarizeBacktest, type BacktestPick } from "../domain/backtest";
-import { buildHistoricalBacktestReadiness } from "../domain/historicalBacktest";
-import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "../domain/modelConfig";
-import { createDatabase, runMigrations, type Db } from "./db/client";
-import { loadLocalEnv } from "./env";
-import { type HistoricalImportReport } from "./historicalImport";
+import { summarizeBacktest, type BacktestPick } from "../domain/backtest.js";
+import { buildHistoricalBacktestReadiness } from "../domain/historicalBacktest.js";
+import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "../domain/modelConfig.js";
+import { createDatabase, runMigrations, type Db } from "./db/client.js";
+import { loadLocalEnv } from "./env.js";
+import { type HistoricalImportReport } from "./historicalImport.js";
 import {
   checkHistoricalOddsAccess,
   checkLiveOddsAccess,
   type HistoricalOddsHealthCheck,
   type LiveOddsHealthCheck,
-} from "./oddsHealth";
-import { fetchMlbSchedule, type MlbScheduledGame, type ProviderResult } from "./providers/mlbStats";
-import { getCurrentModelVersion, saveModelVersion } from "./repositories/modelRepository";
-import { getPickById, listPicksByDate, updatePickResult } from "./repositories/picksRepository";
+} from "./oddsHealth.js";
+import { fetchMlbSchedule, type MlbScheduledGame, type ProviderResult } from "./providers/mlbStats.js";
+import { getCurrentModelVersion, saveModelVersion } from "./repositories/modelRepository.js";
+import { getPickById, listPicksByDate, updatePickResult } from "./repositories/picksRepository.js";
 
 export type ApiRuntimeConfig = {
   oddsApiKey?: string;

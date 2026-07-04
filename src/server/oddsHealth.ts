@@ -1,5 +1,5 @@
-import { fetchHistoricalMlbOdds, fetchMlbOdds } from "./providers/oddsApi";
-import { type ProviderRequestUsage } from "./providers/mlbStats";
+import { fetchHistoricalMlbOdds, fetchMlbOdds } from "./providers/oddsApi.js";
+import { type ProviderRequestUsage } from "./providers/mlbStats.js";
 
 export type LiveOddsHealth = {
   configured: boolean;

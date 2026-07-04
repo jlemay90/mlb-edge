@@ -1,10 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { type FinalGameResult, type FinalGameStatus } from "../domain/grading";
-import { runHistoricalBacktest, type HistoricalBacktestReport } from "../domain/historicalBacktest";
-import { type HistoricalGameReplayInput } from "../domain/historicalReplay";
-import { buildHistoricalSeasonReplay } from "../domain/historicalReplay";
-import { type GameFeatures } from "../domain/projection";
+import { type FinalGameResult, type FinalGameStatus } from "../domain/grading.js";
+import { runHistoricalBacktest, type HistoricalBacktestReport } from "../domain/historicalBacktest.js";
+import { type HistoricalGameReplayInput } from "../domain/historicalReplay.js";
+import { buildHistoricalSeasonReplay } from "../domain/historicalReplay.js";
+import { type GameFeatures } from "../domain/projection.js";
 
 type CalledGameCsvRow = Record<string, string | undefined>;
 

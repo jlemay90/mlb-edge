@@ -1,6 +1,6 @@
-import { DEFAULT_MODEL_CONFIG, type Market, type ModelConfig } from "./modelConfig";
-import { type GradedPick, type PickGradeResult } from "./grading";
-import { type Pick } from "./picks";
+import { DEFAULT_MODEL_CONFIG, type Market, type ModelConfig } from "./modelConfig.js";
+import { type GradedPick, type PickGradeResult } from "./grading.js";
+import { type Pick } from "./picks.js";
 
 export type CalibrationPick = Omit<GradedPick, "result"> & {
   result: PickGradeResult;

@@ -1,4 +1,4 @@
-import { type FetchLike, type ProviderResult } from "./mlbStats";
+import { type FetchLike, type ProviderResult } from "./mlbStats.js";
 
 export type OddsOutcome = {
   name: string;

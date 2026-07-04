@@ -1,5 +1,5 @@
-import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "./modelConfig";
-import { applyKnownBallparkContext } from "./ballparks";
+import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "./modelConfig.js";
+import { applyKnownBallparkContext } from "./ballparks.js";
 
 export type GameFeatures = {
   gameId: string;

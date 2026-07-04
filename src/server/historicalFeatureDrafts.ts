@@ -1,7 +1,7 @@
-import { applyKnownBallparkContext } from "../domain/ballparks";
-import { type GameFeatures } from "../domain/projection";
-import { type MlbScheduledGame } from "./providers/mlbStats";
-import { type OddsEvent } from "./providers/oddsApi";
+import { applyKnownBallparkContext } from "../domain/ballparks.js";
+import { type GameFeatures } from "../domain/projection.js";
+import { type MlbScheduledGame } from "./providers/mlbStats.js";
+import { type OddsEvent } from "./providers/oddsApi.js";
 
 export type HistoricalFeatureMissingSignal =
   | "team offense"

@@ -1,12 +1,12 @@
-import { DEFAULT_MODEL_CONFIG, type Market, type ModelConfig } from "./modelConfig";
-import { removeVigTwoWay } from "./odds";
+import { DEFAULT_MODEL_CONFIG, type Market, type ModelConfig } from "./modelConfig.js";
+import { removeVigTwoWay } from "./odds.js";
 import {
   calculateRunLineProbability,
   calculateTotalProbability,
   projectGame,
   type GameFeatures,
   type GameProjection,
-} from "./projection";
+} from "./projection.js";
 
 export type PickMarket = Exclude<Market, "prop">;
 export type ConfidenceTier = "A" | "B" | "C" | "D";

@@ -1,4 +1,4 @@
-import { runBacktest, type BacktestSlate, type BacktestSummary } from "./backtest";
+import { runBacktest, type BacktestSlate, type BacktestSummary } from "./backtest.js";
 
 export type RequiredHistoricalSignal =
   | "historical odds"

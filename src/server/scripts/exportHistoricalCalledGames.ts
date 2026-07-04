@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { buildHistoricalFeatureDraft } from "../historicalFeatureDrafts";
-import { buildHistoricalPregameContext, buildStarterPitchingContext } from "../historicalPregameFeatures";
-import { fetchMlbScheduleRange, type MlbPitcherGameLogEntry, type MlbScheduledGame } from "../providers/mlbStats";
-import { type OddsBookmaker, type OddsEvent } from "../providers/oddsApi";
-import { type HistoricalImportReport, type OddsCacheManifest } from "../historicalImport";
+import { buildHistoricalFeatureDraft } from "../historicalFeatureDrafts.js";
+import { buildHistoricalPregameContext, buildStarterPitchingContext } from "../historicalPregameFeatures.js";
+import { fetchMlbScheduleRange, type MlbPitcherGameLogEntry, type MlbScheduledGame } from "../providers/mlbStats.js";
+import { type OddsBookmaker, type OddsEvent } from "../providers/oddsApi.js";
+import { type HistoricalImportReport, type OddsCacheManifest } from "../historicalImport.js";
 
 type CachedOddsSnapshot = {
   isoTimestamp: string;

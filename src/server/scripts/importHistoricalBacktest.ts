@@ -1,11 +1,11 @@
 import { resolve } from "node:path";
-import { loadLocalEnv } from "../env";
+import { loadLocalEnv } from "../env.js";
 import {
   buildHistoricalImportReport,
   buildOddsCacheManifest,
   writeHistoricalImportReport,
   writeOddsCacheManifest,
-} from "../historicalImport";
+} from "../historicalImport.js";
 
 loadLocalEnv();
 

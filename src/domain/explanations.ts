@@ -1,4 +1,4 @@
-import { type Pick } from "./picks";
+import { type Pick } from "./picks.js";
 
 export type PickExplanation = {
   title: string;

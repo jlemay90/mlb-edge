@@ -1,5 +1,5 @@
-import { type ParlayCard } from "./parlays";
-import { type Pick, type PickMarket } from "./picks";
+import { type ParlayCard } from "./parlays.js";
+import { type Pick, type PickMarket } from "./picks.js";
 
 export type FinalGameStatus = "final" | "postponed" | "suspended" | "cancelled" | "pending";
 export type PickGradeResult = "win" | "loss" | "push" | "void";

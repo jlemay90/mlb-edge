@@ -16,19 +16,19 @@ import {
   type MlbScheduledGame,
   type ProviderRequestUsage,
   type ProviderResult,
-} from "./providers/mlbStats";
-import { fetchHistoricalMlbOdds, type OddsBookmaker, type OddsEvent } from "./providers/oddsApi";
+} from "./providers/mlbStats.js";
+import { fetchHistoricalMlbOdds, type OddsBookmaker, type OddsEvent } from "./providers/oddsApi.js";
 import {
   fetchHistoricalGameWeather,
   type GameWeather,
   type WeatherSource,
-} from "./providers/weather";
+} from "./providers/weather.js";
 import {
   buildHistoricalFeatureDraft,
   type HistoricalFeatureMissingSignal,
-} from "./historicalFeatureDrafts";
-import { buildHistoricalPregameContext } from "./historicalPregameFeatures";
-import { buildStarterPitchingContext } from "./historicalPregameFeatures";
+} from "./historicalFeatureDrafts.js";
+import { buildHistoricalPregameContext } from "./historicalPregameFeatures.js";
+import { buildStarterPitchingContext } from "./historicalPregameFeatures.js";
 
 export type HistoricalSeasonImportReport = {
   season: number;

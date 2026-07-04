@@ -1,11 +1,11 @@
-import { summarizeBacktest, type BacktestPick } from "./backtest";
-import { buildCalibrationBuckets, recommendThresholdChanges } from "./calibration";
-import { buildPickExplanation } from "./explanations";
-import { gradeParlay, gradePick, type FinalGameResult } from "./grading";
-import { buildHistoricalBacktestReadiness } from "./historicalBacktest";
-import { buildDailyParlays } from "./parlays";
-import { analyzeGame, selectQualifiedPicks, type GameAnalysis, type Pick } from "./picks";
-import { type GameFeatures } from "./projection";
+import { summarizeBacktest, type BacktestPick } from "./backtest.js";
+import { buildCalibrationBuckets, recommendThresholdChanges } from "./calibration.js";
+import { buildPickExplanation } from "./explanations.js";
+import { gradeParlay, gradePick, type FinalGameResult } from "./grading.js";
+import { buildHistoricalBacktestReadiness } from "./historicalBacktest.js";
+import { buildDailyParlays } from "./parlays.js";
+import { analyzeGame, selectQualifiedPicks, type GameAnalysis, type Pick } from "./picks.js";
+import { type GameFeatures } from "./projection.js";
 
 const previewSlate: GameFeatures[] = [
   {

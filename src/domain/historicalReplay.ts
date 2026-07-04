@@ -1,9 +1,9 @@
-import { type BacktestPick, type BacktestSlate } from "./backtest";
-import { gradePick, type FinalGameResult } from "./grading";
-import { type HistoricalSeasonCoverage, type HistoricalSeasonReplay, type RequiredHistoricalSignal } from "./historicalBacktest";
-import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "./modelConfig";
-import { analyzeGame, selectQualifiedPicks } from "./picks";
-import { type GameFeatures } from "./projection";
+import { type BacktestPick, type BacktestSlate } from "./backtest.js";
+import { gradePick, type FinalGameResult } from "./grading.js";
+import { type HistoricalSeasonCoverage, type HistoricalSeasonReplay, type RequiredHistoricalSignal } from "./historicalBacktest.js";
+import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "./modelConfig.js";
+import { analyzeGame, selectQualifiedPicks } from "./picks.js";
+import { type GameFeatures } from "./projection.js";
 
 export type HistoricalGameReplayInput = {
   date: string;

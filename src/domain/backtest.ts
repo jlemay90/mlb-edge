@@ -1,5 +1,5 @@
-import { calculateClv } from "./odds";
-import { type Pick } from "./picks";
+import { calculateClv } from "./odds.js";
+import { type Pick } from "./picks.js";
 
 export type BacktestResult = "win" | "loss" | "push" | "void";
 

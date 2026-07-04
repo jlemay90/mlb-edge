@@ -1,4 +1,4 @@
-import { type GameFeatures } from "./projection";
+import { type GameFeatures } from "./projection.js";
 
 const ATHLETICS_SUTTER_START_YEAR = 2025;
 const ATHLETICS_SUTTER_END_YEAR = 2027;

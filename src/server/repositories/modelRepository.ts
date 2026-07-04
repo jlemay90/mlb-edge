@@ -1,5 +1,5 @@
-import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "../../domain/modelConfig";
-import { type Db } from "../db/client";
+import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "../../domain/modelConfig.js";
+import { type Db } from "../db/client.js";
 
 type ModelRow = {
   config_json: string;

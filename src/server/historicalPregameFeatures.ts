@@ -1,5 +1,5 @@
-import { type GameFeatures } from "../domain/projection";
-import { type MlbPitcherGameLogEntry, type MlbScheduledGame } from "./providers/mlbStats";
+import { type GameFeatures } from "../domain/projection.js";
+import { type MlbPitcherGameLogEntry, type MlbScheduledGame } from "./providers/mlbStats.js";
 
 export type HistoricalPregameContextRequest = {
   game: MlbScheduledGame;

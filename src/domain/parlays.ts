@@ -1,7 +1,7 @@
-import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "./modelConfig";
-import { americanToDecimal } from "./odds";
-import { type Pick } from "./picks";
-import { getGameMatchup } from "./ballparks";
+import { DEFAULT_MODEL_CONFIG, type ModelConfig } from "./modelConfig.js";
+import { americanToDecimal } from "./odds.js";
+import { type Pick } from "./picks.js";
+import { getGameMatchup } from "./ballparks.js";
 
 export type ParlayKind = "power-pair" | "value-three" | "ceiling-four";
 

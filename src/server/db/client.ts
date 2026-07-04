@@ -3,7 +3,7 @@ import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { SCHEMA_STATEMENTS } from "./schema";
+import { SCHEMA_STATEMENTS } from "./schema.js";
 
 const require = createRequire(import.meta.url);
 const { DatabaseSync } = require("node:sqlite") as { DatabaseSync: typeof DatabaseSyncType };
